@@ -1,0 +1,21 @@
+{
+  "name": "cheezyhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CheezyHub — Single Restaurant Smart Ordering System",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w cheezyhub-backend",
+    "dev:frontend": "npm run dev -w cheezyhub-frontend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "db:seed": "npm run db:seed -w cheezyhub-backend",
+    "db:generate": "npm run db:generate -w cheezyhub-backend",
+    "install-all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

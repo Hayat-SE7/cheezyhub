@@ -1,0 +1,348 @@
+// ─────────────────────────────────────────────
+//  CheezyHub — Prisma Schema
+// ─────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────
+
+enum UserRole {
+  customer
+  kitchen
+  delivery
+  admin
+}
+
+enum OrderStatus {
+  pending
+  preparing
+  ready
+  assigned
+  picked_up
+  delivered
+  completed
+  cancelled
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+// ─── Users ───────────────────────────────────
+
+// ─── Users (Merged) ───────────────────────────
+model User {
+  id                 String    @id @default(cuid())
+  name               String
+  mobile             String?   @unique
+  email              String?   @unique
+  pinHash            String
+  role               UserRole  @default(customer)
+  
+  // Cleaned Location Fields
+  isLocationVerified Boolean   @default(false)
+  liveLat            Float?
+  liveLng            Float?
+  liveAddress        String?
+  defaultAddressId   String?
+  addresses          addresses[]
+
+  // ── OTP / Phone verification (v6.1) ──────
+  isVerified         Boolean   @default(false)
+  otpHash            String?   
+  otpExpiresAt       DateTime? 
+  otpAttempts        Int       @default(0)   
+  otpLastSentAt      DateTime? 
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  orders             Order[]
+  tickets            Ticket[]
+
+  @@map("users")
+}
+
+model Staff {
+  id         String   @id @default(cuid())
+  username   String   @unique
+  pinHash    String
+  role       UserRole
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  deliveries Order[]  @relation("DriverOrders")
+
+  @@map("staff")
+}
+
+// ─── Menu ────────────────────────────────────
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+
+  @@map("categories")
+}
+
+model MenuItem {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  basePrice   Float
+  imageUrl    String?
+  isAvailable Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  categoryId  String
+  category    Category        @relation(fields: [categoryId], references: [id])
+  modifierGroups ModifierGroup[]
+  orderItems  OrderItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("menu_items")
+}
+
+model ModifierGroup {
+  id          String     @id @default(cuid())
+  name        String
+  required    Boolean    @default(false)
+  multiSelect Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  menuItemId  String
+  menuItem    MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifiers   Modifier[]
+
+  @@map("modifier_groups")
+}
+
+model Modifier {
+  id               String        @id @default(cuid())
+  name             String
+  priceAdjustment  Float         @default(0)
+  isAvailable      Boolean       @default(true)
+  sortOrder        Int           @default(0)
+  modifierGroupId  String
+  modifierGroup    ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@map("modifiers")
+}
+
+// ─── Orders ──────────────────────────────────
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  status          OrderStatus @default(pending)
+  
+  // ─── Safepay Payment Fields (Added) ───
+  paymentMethod   String      @default("cash")    // "cash" | "safepay"
+  paymentStatus   String      @default("pending") // "pending" | "paid" | "failed"
+  safepayTracker  String?                         // Unique tracker from Safepay
+  payment Payment?
+  
+  subtotal        Float
+  deliveryFee     Float       @default(0)
+  serviceCharge   Float       @default(0)
+  total           Float
+  
+  deliveryAddress String
+  deliveryLat     Float?
+  deliveryLng     Float?
+  notes           String?
+  
+  customerId      String
+  customer        User        @relation(fields: [customerId], references: [id])
+  
+  driverId        String?
+  driver          Staff?      @relation("DriverOrders", fields: [driverId], references: [id])
+  
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String   @id @default(cuid())
+  quantity          Int
+  unitPrice         Float
+  totalPrice        Float
+  notes             String?
+  selectedModifiers Json     // [{name, priceAdjustment}]
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId        String
+  menuItem          MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItemName      String   // snapshot at time of order
+
+  @@map("order_items")
+}
+
+// ─── Support ─────────────────────────────────
+
+model Ticket {
+  id         String         @id @default(cuid())
+  subject    String
+  priority   TicketPriority @default(medium)
+  status     TicketStatus   @default(open)
+  orderId    String?
+  customerId String
+  customer   User           @relation(fields: [customerId], references: [id])
+  messages   TicketMessage[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id         String   @id @default(cuid())
+  message    String
+  senderRole UserRole
+  senderId   String
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@map("ticket_messages")
+}
+
+// ─── System Settings ─────────────────────────
+
+model SystemSettings {
+  id               String  @id @default(cuid())
+  deliveryFee      Float   @default(5.0)
+  serviceCharge    Float   @default(0.0)
+  deliveryRadiusKm Float   @default(10.0)
+  restaurantLat    Float   @default(0)
+  restaurantLng    Float   @default(0)
+  ordersAccepting  Boolean @default(true)
+  restaurantName   String  @default("CheezyHub")
+  restaurantPhone  String  @default("")
+
+  @@map("system_settings")
+}
+
+// ─── WhatsApp Notifications Log ───────────────
+
+model NotificationLog {
+  id         String   @id @default(cuid())
+  to         String
+  type       String   // ORDER_CONFIRMED | OUT_FOR_DELIVERY | ORDER_COMPLETED | TICKET_REPLY
+  payload    Json
+  status     String   @default("pending") // pending | sent | failed
+  errorMsg   String?  // stores error reason on failure (v6.1)
+  retryCount Int      @default(0)          // tracks manual retries (v6.1)
+  createdAt  DateTime @default(now())
+
+  @@map("notification_logs")
+}
+
+// ─── Deals ───────────────────────────────────
+
+enum DealType {
+  combo
+  discount
+  promotion
+  featured
+}
+
+enum DealLocation {
+  slider
+  deals_section
+  both
+}
+
+model Deal {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  imageUrl        String?
+  dealType        DealType     @default(featured)
+  discountType    String       @default("flat") // flat | percent
+  discountValue   Float        @default(0)
+  linkedItemIds   Json         @default("[]")   // string[]
+  validFrom       DateTime     @default(now())
+  validTo         DateTime?
+  displayLocation DealLocation @default(both)
+  isActive        Boolean      @default(true)
+  sortOrder       Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("deals")
+}
+
+// ─── Addresses (Added for v6.1) ────────────────
+
+enum AddressType {
+  home
+  work
+  other
+}
+
+model addresses {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  label       String      @default("Home") // e.g., "Mom's House"
+  type        AddressType @default(home)
+  addressText String      @db.Text
+  houseNo     String?
+  street      String?
+  area        String?
+  city        String?
+  notes       String?     // Delivery instructions
+  
+  latitude    Float?
+  longitude   Float?
+  isGps       Boolean     @default(false)
+  isDefault   Boolean     @default(false)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("addresses")
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  order         Order    @relation(fields: [orderId], references: [id])
+  orderId       String   @unique
+
+  amount        Float
+  currency      String   @default("PKR")
+
+  method        String
+  status        String
+
+  transactionId String?
+  safepayRef    String?
+  metadata      Json?
+
+}
