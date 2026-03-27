@@ -1,160 +1,82 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import {
-  LayoutDashboard, ShoppingBag, UtensilsCrossed,
-  Users, HeadphonesIcon, Settings, LogOut,
-  Menu, X, Tag, ChevronRight, SlidersHorizontal,
-} from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import Link from 'next/link';
+import { useAdminStore } from '@/store/adminStore';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  LayoutDashboard, ShoppingBag, UtensilsCrossed, Tag,
+  Users, UserCog, Settings, MessageSquare, Truck, LogOut, BarChart2,
+} from 'lucide-react';
 
-const navItems = [
-  { href: '/admin',           icon: LayoutDashboard,    label: 'Dashboard',  exact: true },
-  { href: '/admin/orders',    icon: ShoppingBag,         label: 'Orders' },
-  { href: '/admin/menu',      icon: UtensilsCrossed,     label: 'Menu' },
-  { href: '/admin/modifiers', icon: SlidersHorizontal,   label: 'Modifiers' }, // NEW
-  { href: '/admin/deals',     icon: Tag,                 label: 'Deals' },
-  { href: '/admin/staff',     icon: Users,               label: 'Staff' },
-  { href: '/admin/tickets',   icon: HeadphonesIcon,      label: 'Support' },
-  { href: '/admin/settings',  icon: Settings,            label: 'Settings' },
+const NAV = [
+  { href: '/admin',           label: 'Dashboard',  icon: LayoutDashboard, exact: true },
+  { href: '/admin/orders',    label: 'Orders',     icon: ShoppingBag },
+  { href: '/admin/menu',      label: 'Menu',       icon: UtensilsCrossed },
+  { href: '/admin/deals',     label: 'Deals',      icon: Tag },
+  { href: '/admin/customers', label: 'Customers',  icon: Users },
+  { href: '/admin/staff',     label: 'Staff',      icon: UserCog },
+  { href: '/admin/analytics', label: 'Analytics',  icon: BarChart2 },
+  { href: '/admin/tickets',   label: 'Tickets',    icon: MessageSquare },
+  { href: '/admin/settings',  label: 'Settings',   icon: Settings },
 ];
 
-function NavLink({ href, icon: Icon, label, exact, onClick }: {
-  href: string; icon: any; label: string; exact?: boolean; onClick?: () => void;
-}) {
-  const pathname = usePathname();
-  const active   = exact ? pathname === href : pathname.startsWith(href);
-
-  return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={clsx(
-        'group relative flex items-center gap-3 px-3.5 py-2.5 rounded-2xl mb-1 text-sm font-ui font-semibold transition-all duration-200',
-        active
-          ? 'sidebar-item-active'
-          : 'text-white/35 hover:text-white/75 sidebar-item-hover border border-transparent'
-      )}
-    >
-      <Icon size={16} className={clsx('flex-shrink-0', active ? 'text-amber-400' : 'text-current')} strokeWidth={active ? 2.2 : 1.8} />
-      <span>{label}</span>
-      {active && <ChevronRight size={13} className="ml-auto text-amber-400/60" />}
-    </Link>
-  );
-}
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname    = usePathname();
-  const router      = useRouter();
-  const logout      = useAuthStore((s) => s.logout);
-  const user        = useAuthStore((s) => s.user);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname  = usePathname();
+  const router    = useRouter();
+  const { isAuthenticated, user, logout } = useAdminStore();
 
-  if (pathname === '/admin/login') {
-    return <div className="dark-ui">{children}</div>;
-  }
+  useEffect(() => {
+    if (pathname === '/admin/login') return;
+    if (!isAuthenticated) { router.replace('/admin/login'); return; }
+    if (user?.role !== 'admin') { router.replace('/admin/login'); }
+  }, [isAuthenticated, user, pathname]);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/admin/login');
-  };
+  if (pathname === '/admin/login') return <>{children}</>;
+  if (!isAuthenticated) return null;
+
+  const handleLogout = () => { logout(); router.push('/admin/login'); };
 
   return (
-    <div className="dark-ui min-h-screen bg-[#07070a] flex relative">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-amber-500/4 blur-3xl animate-float-slow" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-amber-600/3 blur-3xl animate-float" />
-      </div>
-
-      <button
-        className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-xl glass-dark border border-white/8 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-lg"
-        onClick={() => setMobileOpen(true)}
-      >
-        <Menu size={18} />
-      </button>
-
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="lg:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        <aside
-          className={clsx(
-            'sidebar-glass flex-shrink-0 flex flex-col z-50 transition-transform duration-300',
-            'lg:relative lg:translate-x-0 lg:w-60',
-            'fixed inset-y-0 left-0 w-72',
-            mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
-          )}
-        >
-          <div className="flex items-center justify-between px-5 py-5 border-b border-white/5">
-            <Link href="/admin" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 rounded-xl glass-amber flex items-center justify-center text-lg shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-                🧀
-              </div>
-              <div>
-                <div className="font-display font-bold text-white text-[15px] leading-tight">CheezyHub</div>
-                <div className="text-white/25 text-[11px] font-ui">Admin Panel</div>
-              </div>
-            </Link>
-            <button
-              className="lg:hidden p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/8 transition-all"
-              onClick={() => setMobileOpen(false)}
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          <nav className="flex-1 p-3 overflow-y-auto">
-            <div className="mb-3 px-1">
-              <span className="text-[9px] font-bold text-white/15 uppercase tracking-[0.2em] font-ui">Navigation</span>
+    <div className="min-h-screen flex bg-[#07070a] text-[#f2f2f5]">
+      {/* Sidebar */}
+      <aside className="w-56 flex-shrink-0 bg-[#0c0c0e] border-r border-[#1e1e28] flex flex-col">
+        {/* Logo */}
+        <div className="px-5 py-4 border-b border-[#1e1e28]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-base shadow-lg shadow-amber-400/20">🧀</div>
+            <div>
+              <div className="font-bold text-sm text-[#f2f2f5] leading-tight">CheezyHub</div>
+              <div className="text-[10px] text-[#4a4a58]">Admin Panel</div>
             </div>
-            {navItems.map(({ href, icon, label, exact }) => (
-              <NavLink
-                key={href}
-                href={href}
-                icon={icon}
-                label={label}
-                exact={exact}
-                onClick={() => setMobileOpen(false)}
-              />
-            ))}
-          </nav>
-
-          <div className="p-3 border-t border-white/5">
-            <div className="flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-white/4 border border-white/6 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-                {(user?.username ?? user?.name ?? 'A')[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white/75 text-sm font-semibold font-ui truncate">{user?.username ?? user?.name ?? 'Admin'}</div>
-                <div className="text-white/25 text-[11px] font-ui">Administrator</div>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-2xl text-sm font-ui font-semibold text-white/30 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/15 transition-all"
-            >
-              <LogOut size={15} strokeWidth={1.8} />
-              Sign Out
-            </button>
           </div>
-        </aside>
-      </AnimatePresence>
+        </div>
 
-      <main className="flex-1 overflow-auto relative lg:pl-0 pt-0">
-        <div className="lg:hidden h-16" />
+        {/* Nav */}
+        <nav className="flex-1 py-3 overflow-y-auto">
+          {NAV.map(({ href, label, icon: Icon, exact }) => {
+            const active = exact ? pathname === href : pathname.startsWith(href);
+            return (
+              <Link key={href} href={href} className={clsx('flex items-center gap-2.5 px-4 py-2.5 mx-2 rounded-xl text-sm font-medium transition-colors', active ? 'bg-amber-500/10 text-amber-400' : 'text-[#9898a5] hover:text-[#f2f2f5] hover:bg-[#1a1a24]')}>
+                <Icon size={15} />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-[#1e1e28]">
+          <div className="text-xs text-[#4a4a58] mb-2">{user?.username ?? 'Admin'}</div>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-[#4a4a58] hover:text-red-400 transition-colors w-full">
+            <LogOut size={13} /> Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 overflow-y-auto min-h-screen">
         {children}
       </main>
     </div>

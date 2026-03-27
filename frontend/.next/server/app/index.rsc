@@ -1,0 +1,8 @@
+3:I[61742,[],""]
+4:I[69099,["7601","static/chunks/app/error-49a5589ca6be5b49.js"],"default"]
+5:I[59121,[],""]
+6:I[9485,["9485","static/chunks/9485-5e9c5bbe29685480.js","9160","static/chunks/app/not-found-8426f50f992a9cee.js"],""]
+0:["bcNte_5VJJ3fG1iBF566-",[[["",{"children":["__PAGE__",{}]},"$undefined","$undefined",true],["",{"children":["__PAGE__",{},[["$L1","$L2",null],null],null]},[[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/855206d1967dae6d.css","precedence":"next","crossOrigin":"$undefined"}]],["$","html",null,{"lang":"en","children":["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","segmentPath":["children"],"error":"$4","errorStyles":[],"errorScripts":[],"template":["$","$L5",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":["$","div",null,{"className":"flex flex-col items-center justify-center min-h-[60vh] text-center px-4","children":[["$","div",null,{"className":"text-6xl mb-4","children":"🧀"}],["$","h1",null,{"className":"font-display font-bold text-4xl text-[#1c1714] mb-2","children":"404"}],["$","p",null,{"className":"text-[#a39083] mb-6","children":"Oops! This page seems to have melted away."}],["$","$L6",null,{"href":"/customer","className":"px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors","children":"Back to Menu"}]]}],"notFoundStyles":[]}]}]}]],null],null],["$L7",null]]]]
+2:E{"digest":"NEXT_REDIRECT;replace;/customer;307;"}
+7:[["$","meta","0",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","1",{"charSet":"utf-8"}],["$","title","2",{"children":"CheezyHub"}],["$","meta","3",{"name":"description","content":"Fresh. Fast. Cheezylicious."}]]
+1:null

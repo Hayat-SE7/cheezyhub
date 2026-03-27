@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useAdminStore } from '@/store/adminStore';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
@@ -11,7 +11,7 @@ const DOTS = Array.from({ length: 30 }, (_, i) => i);
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const login  = useAuthStore((s) => s.login);
+  const login  = useAdminStore((s) => s.login);
   const [username, setUsername] = useState('');
   const [pin,      setPin]      = useState('');
   const [showPin,  setShowPin]  = useState(false);
@@ -22,8 +22,9 @@ export default function AdminLoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ identifier: username, pin, role: 'staff' });
-      if (res.data.data.role !== 'admin') { toast.error('Admin access required'); return; }
-      login(res.data.data.token, res.data.data.user);
+      const { token, user } = res.data.data;
+      if (user.role !== 'admin') { toast.error('Admin access required'); return; }
+      login(token, user);
       router.replace('/admin');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Invalid credentials');

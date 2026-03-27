@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { adminApi, analyticsApi } from '@/lib/api';
-import { useSSE } from '@/hooks/useSSE';
+import { useAdminSSE } from '@/hooks/useAdminSSE';
 import { BarChart, LineChart, HorizontalBar, HourHeatmap } from '@/components/admin/Charts';
 import {
   ShoppingBag, TrendingUp, Clock, AlertCircle,
@@ -77,11 +77,9 @@ export default function AdminDashboard() {
     fetchAnalytics();
   }, []);
 
-  useSSE({
-    onEvent: {
-      ORDER_CREATED: () => { fetchStats(); fetchAnalytics(); },
-      ORDER_UPDATED: () => { fetchStats(); fetchAnalytics(); },
-    },
+  useAdminSSE({
+    ORDER_CREATED: () => { fetchStats(); fetchAnalytics(); },
+    ORDER_UPDATED: () => { fetchStats(); fetchAnalytics(); },
   });
 
   // Build daily chart data

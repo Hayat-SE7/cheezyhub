@@ -8,20 +8,7 @@ import {
   Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
   Image, X, Upload, Calendar, Tag, Package, Zap, Star
 } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
-
-// --- DATE HELPERS ---
-const addDays = (date: Date, days: number) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
-
-const hardSafeFormat = (dateInput: any) => {
-  if (!dateInput) return '';
-  const date = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
-  return isValid(date) ? format(date, 'MMM dd, yyyy') : 'Pending';
-};
+import { format, addDays } from 'date-fns';
 
 interface Deal {
   id: string;
@@ -45,10 +32,10 @@ interface MenuItem {
 }
 
 const DEAL_ICONS = {
-  combo:     { icon: Package, color: '#3b82f6', label: 'Combo' },
-  discount:  { icon: Tag,     color: '#ef4444', label: 'Discount' },
-  promotion: { icon: Zap,     color: '#8b5cf6', label: 'Promotion' },
-  featured:  { icon: Star,    color: '#f59e0b', label: 'Featured' },
+  combo:    { icon: Package, color: '#3b82f6', label: 'Combo' },
+  discount: { icon: Tag,     color: '#ef4444', label: 'Discount' },
+  promotion:{ icon: Zap,     color: '#8b5cf6', label: 'Promotion' },
+  featured: { icon: Star,    color: '#f59e0b', label: 'Featured' },
 };
 
 const EMPTY_FORM = {
@@ -64,7 +51,7 @@ const EMPTY_FORM = {
 };
 
 export default function AdminDealsPage() {
-  const [deals,      setDeals]     = useState<Deal[]>([]);
+  const [deals,     setDeals]     = useState<Deal[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [showForm,  setShowForm]  = useState(false);
@@ -75,22 +62,18 @@ export default function AdminDealsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fetchDeals = async () => {
-    try {
-      const res = await dealsApi.getAll();
-      setDeals(res.data.data);
-    } catch (err) {
-      toast.error("Failed to load deals");
-    } finally {
-      setLoading(false);
-    }
+    const res = await dealsApi.getAll();
+    setDeals(res.data.data);
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchDeals();
+    // Load menu items for linking
     menuApi.getAll().then((r) => {
       const items: MenuItem[] = r.data.data.flatMap((cat: any) => cat.items ?? []);
       setMenuItems(items);
-    }).catch(() => toast.error("Failed to load menu items"));
+    });
   }, []);
 
   const openCreate = () => {
@@ -109,9 +92,9 @@ export default function AdminDealsPage() {
       dealType:        deal.dealType,
       discountType:    deal.discountType,
       discountValue:   deal.discountValue,
-      linkedItemIds:   deal.linkedItemIds || [],
-      validFrom:       deal.validFrom ? deal.validFrom.slice(0, 16) : '',
-      validTo:         deal.validTo ? deal.validTo.slice(0, 16) : '',
+      linkedItemIds:   deal.linkedItemIds,
+      validFrom:       deal.validFrom.slice(0, 16),
+      validTo:         deal.validTo?.slice(0, 16) ?? '',
       displayLocation: deal.displayLocation,
       isActive:        deal.isActive,
     });
@@ -138,14 +121,11 @@ export default function AdminDealsPage() {
   const handleSubmit = async () => {
     if (!form.title) { toast.error('Title required'); return; }
     setSubmitting(true);
-    
     const payload = {
       ...form,
       discountValue: Number(form.discountValue),
-      validFrom: new Date(form.validFrom).toISOString(),
-      validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
+      validTo: form.validTo || null,
     };
-
     try {
       if (editing) {
         await dealsApi.update(editing.id, payload);
@@ -157,7 +137,7 @@ export default function AdminDealsPage() {
       setShowForm(false);
       fetchDeals();
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Failed to save');
+      toast.error(err.response?.data?.error ?? 'Failed');
     } finally {
       setSubmitting(false);
     }
@@ -224,6 +204,7 @@ export default function AdminDealsPage() {
         <div className="space-y-3">
           {deals.map((deal) => {
             const typeInfo = DEAL_ICONS[deal.dealType] ?? DEAL_ICONS.featured;
+            const Icon = typeInfo.icon;
             const isExpired = deal.validTo ? new Date(deal.validTo) < now : false;
 
             return (
@@ -234,17 +215,21 @@ export default function AdminDealsPage() {
                   deal.isActive && !isExpired ? 'border-[#222228]' : 'border-[#1a1a1e] opacity-60'
                 )}
               >
+                {/* Image / Emoji */}
                 <div
                   className="w-20 h-20 rounded-xl flex-shrink-0 flex items-center justify-center text-3xl overflow-hidden"
                   style={{ background: typeInfo.color + '15' }}
                 >
-                  {deal.imageUrl ? (
+                  {deal.imageUrl && !deal.imageUrl.startsWith('data:') ? (
+                    <img src={deal.imageUrl} alt={deal.title} className="w-full h-full object-cover rounded-xl" />
+                  ) : deal.imageUrl ? (
                     <img src={deal.imageUrl} alt={deal.title} className="w-full h-full object-cover rounded-xl" />
                   ) : (
                     <span>{deal.dealType === 'combo' ? '🍔' : deal.dealType === 'discount' ? '🔥' : deal.dealType === 'promotion' ? '✨' : '⭐'}</span>
                   )}
                 </div>
 
+                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -286,10 +271,10 @@ export default function AdminDealsPage() {
                     {deal.validTo && (
                       <span className="flex items-center gap-1">
                         <Calendar size={9} />
-                        Ends {hardSafeFormat(deal.validTo)}
+                        Ends {new Date(deal.validTo).toLocaleDateString()}
                       </span>
                     )}
-                    {deal.linkedItemIds?.length > 0 && (
+                    {deal.linkedItemIds.length > 0 && (
                       <span>{deal.linkedItemIds.length} linked item{deal.linkedItemIds.length !== 1 ? 's' : ''}</span>
                     )}
                   </div>
@@ -302,67 +287,74 @@ export default function AdminDealsPage() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-end overflow-y-auto">
-          <div className="w-full max-w-lg bg-[#0f0f11] border-l border-[#222228] min-h-screen p-6">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-end overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-lg bg-[#0f0f11] border-l border-[#222228] min-h-screen p-6 animate-slide-up">
+            {/* Modal header */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display font-bold text-[#f2f2f5] text-lg">
                 {editing ? 'Edit Deal' : 'New Deal'}
               </h2>
-              <button onClick={() => setShowForm(false)} className="p-2 rounded-xl text-[#4a4a58] hover:text-[#f2f2f5] hover:bg-[#1e1e22]">
+              <button onClick={() => setShowForm(false)} className="p-2 rounded-xl text-[#4a4a58] hover:text-[#f2f2f5] hover:bg-[#1e1e22] transition-all">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 pb-20">
-              {/* Image Input */}
-            {/* Image Input Section */}
-<div>
-  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Image</label>
-  <div
-    className="relative h-36 rounded-2xl border-2 border-dashed border-[#2a2a30] flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500/40 transition-colors"
-    onClick={() => fileRef.current?.click()}
-  >
-    {imgPreview ? (
-      <>
-        <img src={imgPreview} alt="preview" className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-2xl">
-          <span className="text-white text-xs font-semibold flex items-center gap-1">
-            <Upload size={12} /> Replace
-          </span>
-        </div>
-      </>
-    ) : (
-      <>
-        <Image size={24} className="text-[#3a3a48] mb-2" />
-        <span className="text-[#3a3a48] text-xs">Click to upload image</span>
-        <span className="text-[#2a2a30] text-[10px] mt-1">PNG, JPG under 2MB</span>
-      </>
-    )}
-  </div>
-  
-  {/* Hidden File Input */}
-  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+            <div className="space-y-4">
+              {/* Image upload */}
+              <div>
+                <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Image</label>
+                <div
+                  className="relative h-36 rounded-2xl border-2 border-dashed border-[#2a2a30] flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500/40 transition-colors"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {imgPreview ? (
+                    <>
+                      <img src={imgPreview} alt="preview" className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-2xl">
+                        <span className="text-white text-xs font-semibold flex items-center gap-1">
+                          <Upload size={12} /> Replace
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Image size={24} className="text-[#3a3a48] mb-2" />
+                      <span className="text-[#3a3a48] text-xs">Click to upload image</span>
+                      <span className="text-[#2a2a30] text-[10px] mt-1">PNG, JPG under 2MB</span>
+                    </>
+                  )}
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
 
-  {/* NEW/RESTORED: Paste Image URL Input */}
-  <div className="mt-2">
-    <input
-      className="w-full px-3 py-2 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-xs placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40"
-      placeholder="…or paste image URL"
-      value={form.imageUrl?.startsWith('data:') ? '' : (form.imageUrl ?? '')}
-      onChange={(e) => {
-        const url = e.target.value;
-        setForm((f) => ({ ...f, imageUrl: url }));
-        setImgPreview(url);
-      }}
-    />
-  </div>
-</div>
+                {/* Or URL */}
+                <div className="mt-2">
+                  <input
+                    className="w-full px-3 py-2 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-xs placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40"
+                    placeholder="…or paste image URL"
+                    value={form.imageUrl?.startsWith('data:') ? '' : (form.imageUrl ?? '')}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      setForm((f) => ({ ...f, imageUrl: url }));
+                      setImgPreview(url);
+                    }}
+                  />
+                </div>
+                {imgPreview && (
+                  <button
+                    onClick={() => { setImgPreview(''); setForm((f) => ({ ...f, imageUrl: '' })); }}
+                    className="mt-1.5 text-[10px] text-red-400 hover:text-red-300"
+                  >
+                    Remove image
+                  </button>
+                )}
+              </div>
+
               {/* Title */}
               <div>
                 <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Title *</label>
                 <input
-                  className="w-full px-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
-                  placeholder="Deal Title"
+                  className="w-full px-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40"
+                  placeholder="e.g. Family Combo Deal"
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 />
@@ -372,86 +364,89 @@ export default function AdminDealsPage() {
               <div>
                 <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Description</label>
                 <textarea
-                  className="w-full px-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
+                  className="w-full px-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40 resize-none"
                   rows={2}
+                  placeholder="Short description for customers"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
               </div>
 
-              {/* Type & Display */}
+              {/* Type + Location row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Type</label>
                   <select
                     className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none"
                     value={form.dealType}
-                    onChange={(e) => setForm((f) => ({ ...f, dealType: e.target.value as any }))}
+                    onChange={(e) => setForm((f) => ({ ...f, dealType: e.target.value as Deal['dealType'] }))}
                   >
-                    {Object.entries(DEAL_ICONS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {Object.entries(DEAL_ICONS).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Display</label>
+                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Show In</label>
                   <select
                     className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none"
                     value={form.displayLocation}
-                    onChange={(e) => setForm((f) => ({ ...f, displayLocation: e.target.value as any }))}
+                    onChange={(e) => setForm((f) => ({ ...f, displayLocation: e.target.value as Deal['displayLocation'] }))}
                   >
-                    <option value="both">Both</option>
-                    <option value="slider">Slider</option>
-                    <option value="deals_section">Deals Section</option>
+                    <option value="both">Slider + Deals</option>
+                    <option value="slider">Slider only</option>
+                    <option value="deals_section">Deals only</option>
                   </select>
                 </div>
               </div>
 
-              {/* Discount Logic */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Discount Type</label>
+              {/* Discount */}
+              <div>
+                <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Discount</label>
+                <div className="flex gap-2">
                   <select
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none"
+                    className="px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none"
                     value={form.discountType}
-                    onChange={(e) => setForm((f) => ({ ...f, discountType: e.target.value as any }))}
+                    onChange={(e) => setForm((f) => ({ ...f, discountType: e.target.value as 'flat' | 'percent' }))}
                   >
-                    <option value="flat">Flat ($)</option>
-                    <option value="percent">Percent (%)</option>
+                    <option value="flat">$ Flat</option>
+                    <option value="percent">% Percent</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Value</label>
                   <input
                     type="number"
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none"
-                    value={form.discountValue}
+                    min="0"
+                    step="0.5"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
+                    placeholder="0"
+                    value={form.discountValue || ''}
                     onChange={(e) => setForm((f) => ({ ...f, discountValue: parseFloat(e.target.value) || 0 }))}
                   />
                 </div>
               </div>
 
-              {/* Validity Dates */}
+              {/* Validity */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Starts</label>
                   <input
                     type="datetime-local"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
                     value={form.validFrom}
                     onChange={(e) => setForm((f) => ({ ...f, validFrom: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Ends</label>
+                  <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">Ends (optional)</label>
                   <input
                     type="datetime-local"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
                     value={form.validTo}
                     onChange={(e) => setForm((f) => ({ ...f, validTo: e.target.value }))}
                   />
                 </div>
               </div>
 
-              {/* RESTORED LINKED ITEMS FEATURE */}
+              {/* Link menu items */}
               {menuItems.length > 0 && (
                 <div>
                   <label className="block text-xs text-[#4a4a58] font-semibold uppercase tracking-wider mb-2">
@@ -485,11 +480,11 @@ export default function AdminDealsPage() {
                 </div>
               )}
 
-              {/* Active Toggle */}
+              {/* Active toggle */}
               <div className="flex items-center justify-between p-4 rounded-xl bg-[#111113] border border-[#222228]">
                 <div>
                   <div className="text-[#f2f2f5] text-sm font-semibold">Active</div>
-                  <div className="text-[#4a4a58] text-xs">Visible to customers</div>
+                  <div className="text-[#4a4a58] text-xs">Show to customers immediately</div>
                 </div>
                 <button
                   onClick={() => setForm((f) => ({ ...f, isActive: !f.isActive }))}
@@ -499,13 +494,18 @@ export default function AdminDealsPage() {
                 </button>
               </div>
 
-              {/* Submit Buttons */}
+              {/* Submit buttons */}
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-xl border border-[#222228] text-[#6a6a78] text-sm font-semibold">Cancel</button>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 py-3 rounded-xl border border-[#222228] text-[#6a6a78] text-sm font-semibold hover:border-[#333340] transition-colors"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-display font-bold text-sm"
+                  className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-display font-bold text-sm transition-colors shadow-lg shadow-amber-500/20"
                 >
                   {submitting ? 'Saving...' : editing ? 'Update Deal' : 'Create Deal'}
                 </button>

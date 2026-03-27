@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useKitchenStore } from '@/store/kitchenStore';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, ChefHat, ArrowRight, Flame } from 'lucide-react';
 
 export default function KitchenLoginPage() {
   const router = useRouter();
-  const login  = useAuthStore((s) => s.login);
+  const login  = useKitchenStore((s) => s.login);
   const [username, setUsername] = useState('');
   const [pin,      setPin]      = useState('');
   const [showPin,  setShowPin]  = useState(false);
@@ -20,7 +20,8 @@ export default function KitchenLoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ identifier: username, pin, role: 'staff' });
-      login(res.data.data.token, res.data.data.user);
+      const { token, user } = res.data.data;
+      login(token, user);
       router.replace('/kitchen');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Invalid credentials');

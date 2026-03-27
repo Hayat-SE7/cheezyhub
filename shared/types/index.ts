@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────
 //  CheezyHub — Shared Types
 // ─────────────────────────────────────────────
-
-export type UserRole = 'customer' | 'kitchen' | 'delivery' | 'admin';
+export type UserRole = 'customer' | 'kitchen' | 'delivery' | 'admin' | 'cashier';
 
 export type OrderStatus =
   | 'pending'
@@ -13,6 +12,9 @@ export type OrderStatus =
   | 'delivered'
   | 'completed'
   | 'cancelled';
+
+export type OrderType = 'delivery' | 'counter' | 'dine_in';
+export type AddressType = 'home' | 'work' | 'other';
 
 export type TicketPriority = 'low' | 'medium' | 'high';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
@@ -31,7 +33,7 @@ export interface User {
 export interface Staff {
   id: string;
   username: string;
-  role: 'kitchen' | 'delivery' | 'admin';
+  role: 'kitchen' | 'delivery' | 'admin' | 'cashier';
   isActive: boolean;
   createdAt: string;
 }
@@ -108,6 +110,9 @@ export interface Order {
   driverId?: string;
   driverName?: string;
   notes?: string;
+  orderType: OrderType;
+  offlineSync: boolean;
+  offlineCreatedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

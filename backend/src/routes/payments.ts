@@ -59,7 +59,7 @@ const order = await prisma.order.findUnique({
   where: { id: orderId },
   include: {
     payment: true,
-    customer: true   // ← ADD THIS
+    customer: { select: { id: true, name: true, mobile: true } }
   }
 });
 
@@ -90,16 +90,16 @@ const order = await prisma.order.findUnique({
         // COD is confirmed instantly — broadcast to kitchen
         const fullOrder = await prisma.order.findUnique({
           where:   { id: orderId },
-          include: { items: true, customer: true },
+          include: { items: true, customer: { select: { id: true, name: true, mobile: true } } },
         });
         sseManager.broadcastToKitchen('ORDER_CREATED', fullOrder);
         sseManager.broadcastToAdmin('ORDER_CREATED', fullOrder);
 
         // WhatsApp: ORDER_CONFIRMED (safe to fire now for COD)
-        if (order.customer.mobile) {
-          await whatsappService.send('ORDER_CONFIRMED', order.customer.mobile, {
+        if (order.customer?.mobile) {
+          await whatsappService.send('ORDER_CONFIRMED', order.customer!.mobile, {
             orderNumber:  order.orderNumber,
-            customerName: order.customer.name,
+            customerName: order.customer!.name,
             total:        order.total,
           });
         }
@@ -226,7 +226,7 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
     // Find order by tracker token
     const order = await prisma.order.findFirst({
       where:   { safepayTracker: tracker },
-      include: { customer: true },
+      include: { customer: { select: { id: true, name: true, mobile: true } } },
     });
 
     if (!order) {
@@ -256,22 +256,22 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
       // NOW broadcast to kitchen — payment is confirmed
       const fullOrder = await prisma.order.findUnique({
         where:   { id: order.id },
-        include: { items: true, customer: true },
+        include: { items: true, customer: { select: { id: true, name: true, mobile: true } } },
       });
       sseManager.broadcastToKitchen('ORDER_CREATED', fullOrder);
       sseManager.broadcastToAdmin('ORDER_CREATED', fullOrder);
 
       // SSE to customer — payment confirmed
-      sseManager.sendToCustomer(order.customerId, 'PAYMENT_CONFIRMED', {
+      sseManager.sendToCustomer(order.customerId!, 'PAYMENT_CONFIRMED', {
         orderId:     order.id,
         orderNumber: order.orderNumber,
       });
 
       // WhatsApp ORDER_CONFIRMED — now safe to fire
-      if (order.customer.mobile) {
-        await whatsappService.send('ORDER_CONFIRMED', order.customer.mobile, {
+      if (order.customer?.mobile) {
+        await whatsappService.send('ORDER_CONFIRMED', order.customer!.mobile, {
           orderNumber:  order.orderNumber,
-          customerName: order.customer.name,
+          customerName: order.customer!.name,
           total:        order.total,
         });
       }
@@ -292,7 +292,7 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
         }),
       ]);
 
-      sseManager.sendToCustomer(order.customerId, 'PAYMENT_FAILED', {
+      sseManager.sendToCustomer(order.customerId!, 'PAYMENT_FAILED', {
         orderId:     order.id,
         orderNumber: order.orderNumber,
         reason:      'Payment was not completed',
@@ -334,7 +334,7 @@ paymentRouter.post('/stub-confirm', async (req: Request, res: Response) => {
   try {
     const order = await prisma.order.findUnique({
       where:   { id: orderId },
-      include: { customer: true },
+      include: { customer: { select: { id: true, name: true, mobile: true } } },
     });
 
     if (!order) {
@@ -369,20 +369,20 @@ paymentRouter.post('/stub-confirm', async (req: Request, res: Response) => {
     // Fire SSE + WhatsApp exactly as the real webhook does
     const fullOrder = await prisma.order.findUnique({
       where:   { id: orderId },
-      include: { items: true, customer: true },
+      include: { items: true, customer: { select: { id: true, name: true, mobile: true } } },
     });
 
     sseManager.broadcastToKitchen('ORDER_CREATED', fullOrder);
     sseManager.broadcastToAdmin('ORDER_CREATED', fullOrder);
-    sseManager.sendToCustomer(order.customerId, 'PAYMENT_CONFIRMED', {
+    sseManager.sendToCustomer(order.customerId!, 'PAYMENT_CONFIRMED', {
       orderId,
       orderNumber: order.orderNumber,
     });
 
-    if (order.customer.mobile) {
-      await whatsappService.send('ORDER_CONFIRMED', order.customer.mobile, {
+    if (order.customer?.mobile) {
+      await whatsappService.send('ORDER_CONFIRMED', order.customer!.mobile, {
         orderNumber:  order.orderNumber,
-        customerName: order.customer.name,
+        customerName: order.customer!.name,
         total:        order.total,
       });
     }

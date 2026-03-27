@@ -1,5 +1,8 @@
 // ─────────────────────────────────────────────
-//  CheezyHub — Prisma Schema
+//  CheezyHub — Prisma Schema  (Complete)
+//  Includes: Shift, LedgerEntry, Payment,
+//            HolidayRequest, driver Staff fields,
+//            cashier UserRole, OrderType
 // ─────────────────────────────────────────────
 
 generator client {
@@ -7,8 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Enums ───────────────────────────────────
@@ -18,6 +22,7 @@ enum UserRole {
   kitchen
   delivery
   admin
+  cashier    // POS counter staff
 }
 
 enum OrderStatus {
@@ -29,6 +34,12 @@ enum OrderStatus {
   delivered
   completed
   cancelled
+}
+
+enum OrderType {
+  delivery
+  counter
+  dine_in
 }
 
 enum TicketPriority {
@@ -44,51 +55,102 @@ enum TicketStatus {
   closed
 }
 
+enum DealType {
+  combo
+  discount
+  promotion
+  featured
+}
+
+enum DealLocation {
+  slider
+  deals_section
+  both
+}
+
+enum AddressType {
+  home
+  work
+  other
+}
+
 // ─── Users ───────────────────────────────────
 
-// ─── Users (Merged) ───────────────────────────
 model User {
-  id                 String    @id @default(cuid())
-  name               String
-  mobile             String?   @unique
-  email              String?   @unique
-  pinHash            String
-  role               UserRole  @default(customer)
-  
-  // Cleaned Location Fields
-  isLocationVerified Boolean   @default(false)
-  liveLat            Float?
-  liveLng            Float?
-  liveAddress        String?
-  defaultAddressId   String?
-  addresses          addresses[]
+  id         String   @id @default(cuid())
+  name       String
+  mobile     String?  @unique
+  email      String?  @unique
+  pinHash    String
+  role       UserRole @default(customer)
+  adminNote  String?
+  isBlocked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  // ── OTP / Phone verification (v6.1) ──────
-  isVerified         Boolean   @default(false)
-  otpHash            String?   
-  otpExpiresAt       DateTime? 
-  otpAttempts        Int       @default(0)   
-  otpLastSentAt      DateTime? 
+  orders    Order[]
+  tickets   Ticket[]
+  addresses Address[]
+  favourites Favourite[]
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  // OTP verification fields (field names match otpService.ts)
+  otpHash       String?
+  otpExpiresAt  DateTime?
+  otpAttempts   Int       @default(0)
+  otpLastSentAt DateTime?
+  isVerified    Boolean   @default(false)
 
-  orders             Order[]
-  tickets            Ticket[]
+  // Customer tags (admin tagging feature)
+  tags          Json      @default("[]")
+
+  // Live location (set after GPS confirmation)
+  liveLat           Float?
+  liveLng           Float?
+  liveAddress       String?
+  isLocationVerified Boolean  @default(false)
+  defaultAddressId  String?
 
   @@map("users")
 }
 
 model Staff {
-  id         String   @id @default(cuid())
-  username   String   @unique
-  pinHash    String
-  role       UserRole
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String    @id @default(cuid())
+  username    String    @unique
+  pinHash     String
+  role        UserRole
+  isActive    Boolean   @default(true)
+  fullName    String?
+  phone       String?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  deliveries Order[]  @relation("DriverOrders")
+  // ── Driver-specific fields ─────────────────
+  vehicleType        String?   // bike | car | van
+  vehiclePlate       String?
+  emergencyContact   String?
+  cnic               String?
+  cnicFrontUrl       String?
+  cnicBackUrl        String?
+  licensePhotoUrl    String?
+  profilePhotoUrl    String?
+  verificationStatus String    @default("PENDING") // PENDING | UNDER_REVIEW | VERIFIED | REJECTED
+  verificationNote   String?
+  verifiedAt         DateTime?
+  verifiedBy         String?   // admin Staff id
+  driverStatus       String    @default("OFFLINE")  // OFFLINE | AVAILABLE | ON_DELIVERY
+  codPending         Float     @default(0)
+  totalDeliveries    Int       @default(0)
+  todayDeliveries    Int       @default(0)
+  activeOrderCount   Int       @default(0)
+
+  // Relations
+  deliveries      Order[]          @relation("DriverOrders")
+  shifts          Shift[]
+  ledgerEntries   LedgerEntry[]
+  counterOrders   Order[]          @relation("CashierOrders")
+  settlements     DriverSettlement[]
+  holidayRequests HolidayRequest[]
 
   @@map("staff")
 }
@@ -105,19 +167,20 @@ model Category {
 }
 
 model MenuItem {
-  id          String          @id @default(cuid())
-  name        String
-  description String?
-  basePrice   Float
-  imageUrl    String?
-  isAvailable Boolean         @default(true)
-  sortOrder   Int             @default(0)
-  categoryId  String
-  category    Category        @relation(fields: [categoryId], references: [id])
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  basePrice      Float
+  imageUrl       String?
+  isAvailable    Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  categoryId     String
+  category       Category        @relation(fields: [categoryId], references: [id])
   modifierGroups ModifierGroup[]
-  orderItems  OrderItem[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  orderItems     OrderItem[]
+  favourites     Favourite[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@map("menu_items")
 }
@@ -136,13 +199,13 @@ model ModifierGroup {
 }
 
 model Modifier {
-  id               String        @id @default(cuid())
-  name             String
-  priceAdjustment  Float         @default(0)
-  isAvailable      Boolean       @default(true)
-  sortOrder        Int           @default(0)
-  modifierGroupId  String
-  modifierGroup    ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  name            String
+  priceAdjustment Float         @default(0)
+  isAvailable     Boolean       @default(true)
+  sortOrder       Int           @default(0)
+  modifierGroupId String
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
 
   @@map("modifiers")
 }
@@ -152,33 +215,43 @@ model Modifier {
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique
+  orderType       OrderType   @default(delivery)
   status          OrderStatus @default(pending)
-  
-  // ─── Safepay Payment Fields (Added) ───
-  paymentMethod   String      @default("cash")    // "cash" | "safepay"
-  paymentStatus   String      @default("pending") // "pending" | "paid" | "failed"
-  safepayTracker  String?                         // Unique tracker from Safepay
-  payment Payment?
-  
   subtotal        Float
   deliveryFee     Float       @default(0)
   serviceCharge   Float       @default(0)
   total           Float
-  
-  deliveryAddress String
+  deliveryAddress String      @default("")
   deliveryLat     Float?
   deliveryLng     Float?
   notes           String?
-  
-  customerId      String
-  customer        User        @relation(fields: [customerId], references: [id])
-  
-  driverId        String?
-  driver          Staff?      @relation("DriverOrders", fields: [driverId], references: [id])
-  
-  items           OrderItem[]
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+
+  // Payment fields (plain strings — NOT relations)
+  paymentMethod   String      @default("cash")
+  paymentStatus   String      @default("none")
+  safepayTracker  String?
+
+  // Offline sync fields (Phase 12 — counter POS)
+  offlineSync       Boolean   @default(false)
+  offlineCreatedAt  DateTime?
+
+  customerId String?
+  customer   User?   @relation(fields: [customerId], references: [id])
+
+  cashierId String?
+  cashier   Staff?  @relation("CashierOrders", fields: [cashierId], references: [id])
+
+  driverId String?
+  driver   Staff?  @relation("DriverOrders", fields: [driverId], references: [id])
+
+  shiftId String?
+  shift   Shift?  @relation(fields: [shiftId], references: [id])
+
+  items        OrderItem[]
+  payment      Payment?
+  ledgerEntry  LedgerEntry?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@map("orders")
 }
@@ -197,6 +270,68 @@ model OrderItem {
   menuItemName      String   // snapshot at time of order
 
   @@map("order_items")
+}
+
+// ─── Counter / POS ───────────────────────────
+
+model Shift {
+  id           String    @id @default(cuid())
+  cashierId    String
+  cashier      Staff     @relation(fields: [cashierId], references: [id])
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  openingFloat Float     @default(0)
+  closingCash  Float?
+  expectedCash Float?
+  discrepancy  Float?
+  orderCount   Int       @default(0)
+  totalSales   Float     @default(0)
+  status       String    @default("open")  // open | closed
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  orders        Order[]
+  ledgerEntries LedgerEntry[]
+
+  @@map("shifts")
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  cashierId   String
+  cashier     Staff    @relation(fields: [cashierId], references: [id])
+  shiftId     String?
+  shift       Shift?   @relation(fields: [shiftId], references: [id])
+  amount      Float
+  method      String   @default("cash")  // cash | card | split
+  cashAmount  Float?
+  cardAmount  Float?
+  collectedAt DateTime @default(now())
+  notes       String?
+
+  @@map("ledger_entries")
+}
+
+// ─── Payments ────────────────────────────────
+
+model Payment {
+  id           String   @id @default(cuid())
+  orderId      String   @unique
+  order        Order    @relation(fields: [orderId], references: [id])
+  method       String   // cash | safepay
+  amount       Float
+  currency     String   @default("PKR")
+  status       String   @default("pending")  // pending | paid | failed
+  safepayToken String?
+  safepayRef   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("payments")
 }
 
 // ─── Support ─────────────────────────────────
@@ -228,18 +363,60 @@ model TicketMessage {
   @@map("ticket_messages")
 }
 
+// ─── Driver Settlements ───────────────────────
+
+model DriverSettlement {
+  id              String   @id @default(cuid())
+  driverId        String
+  driver          Staff    @relation(fields: [driverId], references: [id])
+  collectedAmount Float    @default(0)   // total COD the driver had at time of settlement
+  submittedAmount Float
+  remainingAmount Float    @default(0)   // codPending after settlement
+  settledAmount   Float?
+  status          String   @default("pending")  // pending | settled | disputed
+  notes           String?
+  settledBy       String?  // admin Staff id
+  settledAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("driver_settlements")
+}
+
+// ─── Holiday Requests ────────────────────────
+
+model HolidayRequest {
+  id          String    @id @default(cuid())
+  driverId    String
+  driver      Staff     @relation(fields: [driverId], references: [id])
+  fromDate    DateTime
+  toDate      DateTime
+  reason      String?
+  status      String    @default("PENDING")  // PENDING | APPROVED | REJECTED
+  reviewedBy  String?   // admin Staff id
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("holiday_requests")
+}
+
 // ─── System Settings ─────────────────────────
 
 model SystemSettings {
-  id               String  @id @default(cuid())
-  deliveryFee      Float   @default(5.0)
-  serviceCharge    Float   @default(0.0)
-  deliveryRadiusKm Float   @default(10.0)
-  restaurantLat    Float   @default(0)
-  restaurantLng    Float   @default(0)
-  ordersAccepting  Boolean @default(true)
-  restaurantName   String  @default("CheezyHub")
-  restaurantPhone  String  @default("")
+  id                    String  @id @default(cuid())
+  deliveryFee           Float   @default(5.0)
+  freeDeliveryThreshold Float   @default(0)
+  serviceCharge         Float   @default(0.0)
+  deliveryRadiusKm      Float   @default(10.0)
+  restaurantLat         Float   @default(0)
+  restaurantLng         Float   @default(0)
+  ordersAccepting       Boolean @default(true)
+  isOpen                Boolean @default(true)
+  prepTimeMinutes       Int     @default(30)
+  restaurantName        String  @default("CheezyHub")
+  restaurantPhone       String  @default("")
 
   @@map("system_settings")
 }
@@ -247,32 +424,17 @@ model SystemSettings {
 // ─── WhatsApp Notifications Log ───────────────
 
 model NotificationLog {
-  id         String   @id @default(cuid())
-  to         String
-  type       String   // ORDER_CONFIRMED | OUT_FOR_DELIVERY | ORDER_COMPLETED | TICKET_REPLY
-  payload    Json
-  status     String   @default("pending") // pending | sent | failed
-  errorMsg   String?  // stores error reason on failure (v6.1)
-  retryCount Int      @default(0)          // tracks manual retries (v6.1)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  to        String
+  type      String
+  payload   Json
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
 
   @@map("notification_logs")
 }
 
 // ─── Deals ───────────────────────────────────
-
-enum DealType {
-  combo
-  discount
-  promotion
-  featured
-}
-
-enum DealLocation {
-  slider
-  deals_section
-  both
-}
 
 model Deal {
   id              String       @id @default(cuid())
@@ -280,9 +442,9 @@ model Deal {
   description     String?
   imageUrl        String?
   dealType        DealType     @default(featured)
-  discountType    String       @default("flat") // flat | percent
+  discountType    String       @default("flat")
   discountValue   Float        @default(0)
-  linkedItemIds   Json         @default("[]")   // string[]
+  linkedItemIds   Json         @default("[]")
   validFrom       DateTime     @default(now())
   validTo         DateTime?
   displayLocation DealLocation @default(both)
@@ -294,55 +456,54 @@ model Deal {
   @@map("deals")
 }
 
-// ─── Addresses (Added for v6.1) ────────────────
+// ─── Address Book ─────────────────────────────
 
-enum AddressType {
-  home
-  work
-  other
-}
-
-model addresses {
+model Address {
   id          String      @id @default(cuid())
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  label       String      @default("Home") // e.g., "Mom's House"
+  label       String      @default("Home")
   type        AddressType @default(home)
-  addressText String      @db.Text
+  addressText String
   houseNo     String?
   street      String?
   area        String?
   city        String?
-  notes       String?     // Delivery instructions
-  
+  notes       String?
   latitude    Float?
   longitude   Float?
   isGps       Boolean     @default(false)
   isDefault   Boolean     @default(false)
-
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   @@map("addresses")
 }
 
-model Payment {
-  id            String   @id @default(uuid())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// ─── Offline Sync Log (Phase 12 — Counter POS) ──
 
-  order         Order    @relation(fields: [orderId], references: [id])
-  orderId       String   @unique
+model OfflineSyncLog {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  orderId        String?
+  cashierId      String
+  status         String   @default("pending")  // pending | success | failed
+  errorMessage   String?
+  createdAt      DateTime @default(now())
 
-  amount        Float
-  currency      String   @default("PKR")
+  @@map("offline_sync_logs")
+}
 
-  method        String
-  status        String
+// ─── Favourites ───────────────────────────────────
 
-  transactionId String?
-  safepayRef    String?
-  metadata      Json?
+model Favourite {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
 
+  @@unique([userId, menuItemId])
+  @@map("favourites")
 }

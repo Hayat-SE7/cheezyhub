@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { deliveryApi } from '@/lib/api';
 import { useSSE } from '@/hooks/useSSE';
-import { useAuthStore } from '@/store/authStore';
+import { useDeliveryStore } from '@/store/deliveryStore';
 import { useRouter } from 'next/navigation';
 import {
   MapPin, Navigation, CheckCircle2, Package,
@@ -233,7 +233,7 @@ function DeliveryCard({ order, onStatusUpdate }: {
 export default function DeliveryPage() {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [loading,  setLoading]  = useState(true);
-  const logout = useAuthStore((s) => s.logout);
+  const logout = useDeliveryStore((s) => s.logout);
   const router = useRouter();
 
   useEffect(() => {

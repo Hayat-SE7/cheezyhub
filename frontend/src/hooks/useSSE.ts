@@ -8,22 +8,52 @@ type EventHandler = (data: unknown) => void;
 interface UseSSEOptions {
   onEvent?: Record<string, EventHandler>;
   enabled?: boolean;
+  [key: string]: EventHandler | Record<string, EventHandler> | boolean | undefined;
 }
 
-export function useSSE({ onEvent = {}, enabled = true }: UseSSEOptions = {}) {
+// Supports all three call signatures used across the codebase:
+//   1. useSSE({ onEvent: { EVENT: fn }, enabled? })  ← structured style
+//   2. useSSE({ EVENT: fn, EVENT2: fn2 })             ← shorthand (handlers as top-level keys)
+//   3. useSSE('/sse/admin', { EVENT: fn })            ← legacy url + handlers style
+export function useSSE(
+  urlOrOptions?: string | UseSSEOptions,
+  legacyHandlers?: Record<string, EventHandler>,
+) {
+  let onEvent: Record<string, EventHandler> = {};
+  let enabled = true;
+
+  if (typeof urlOrOptions === 'string') {
+    // Pattern 3: useSSE(url, handlers)
+    onEvent = legacyHandlers ?? {};
+  } else if (urlOrOptions) {
+    if (urlOrOptions.onEvent || 'enabled' in urlOrOptions) {
+      // Pattern 1: useSSE({ onEvent, enabled })
+      onEvent = (urlOrOptions.onEvent as Record<string, EventHandler>) ?? {};
+      enabled = urlOrOptions.enabled !== false;
+      // Also pick up any stray top-level handler keys alongside onEvent/enabled
+      for (const [k, v] of Object.entries(urlOrOptions)) {
+        if (k !== 'onEvent' && k !== 'enabled' && typeof v === 'function') {
+          onEvent[k] = v as EventHandler;
+        }
+      }
+    } else {
+      // Pattern 2: useSSE({ EVENT: fn }) — all keys are handlers
+      for (const [k, v] of Object.entries(urlOrOptions)) {
+        if (typeof v === 'function') onEvent[k] = v as EventHandler;
+      }
+    }
+  }
+
   const esRef = useRef<EventSource | null>(null);
-  // Always hold latest handlers — avoids stale closures without re-connecting
   const handlersRef = useRef<Record<string, EventHandler>>({});
   handlersRef.current = onEvent;
 
-  // Registered listener wrappers — so we can remove them on cleanup
   const listenerWrappersRef = useRef<Record<string, (e: MessageEvent) => void>>({});
 
   const connect = useCallback(() => {
     const token = Cookies.get('ch_token');
     if (!token || !enabled) return;
 
-    // Close any existing connection
     esRef.current?.close();
 
     const url = `${process.env.NEXT_PUBLIC_API_URL}/sse/connect?token=${token}`;
@@ -34,13 +64,9 @@ export function useSSE({ onEvent = {}, enabled = true }: UseSSEOptions = {}) {
       console.log('[SSE] ✅ Connected');
     });
 
-    // Register all event listeners from the current handlers map
     const registerHandlers = () => {
-      const eventNames = Object.keys(handlersRef.current);
-      for (const eventName of eventNames) {
-        // Avoid duplicate listeners
+      for (const eventName of Object.keys(handlersRef.current)) {
         if (listenerWrappersRef.current[eventName]) continue;
-
         const wrapper = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
@@ -54,7 +80,6 @@ export function useSSE({ onEvent = {}, enabled = true }: UseSSEOptions = {}) {
       }
     };
 
-    // Register immediately + after a tick (handles delayed handler registration)
     registerHandlers();
     setTimeout(registerHandlers, 0);
 
@@ -74,4 +99,3 @@ export function useSSE({ onEvent = {}, enabled = true }: UseSSEOptions = {}) {
     };
   }, [connect]);
 }
-

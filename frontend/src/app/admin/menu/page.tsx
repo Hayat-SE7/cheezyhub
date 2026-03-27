@@ -1,32 +1,31 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { menuApi, kitchenApi, modifierGroupApi } from '@/lib/api';
+import { menuApi, kitchenApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import {
   Plus, Pencil, Trash2, X, Upload, ImagePlus,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, ChevronUp,
   FolderPlus, Settings2, GripVertical,
-  Check, Package, SlidersHorizontal,
+  AlertCircle, Check, Package, DollarSign,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────
 
 interface Modifier {
-  id: string;
+  id?: string;
   name: string;
   priceAdjustment: number;
   isAvailable: boolean;
 }
 
 interface ModifierGroup {
-  id: string;
+  id?: string;
   name: string;
   required: boolean;
   multiSelect: boolean;
   modifiers: Modifier[];
-  _count?: { menuItems: number };
 }
 
 interface MenuItem {
@@ -51,12 +50,22 @@ interface Category {
 
 // ─── Defaults ────────────────────────────────────────
 
-const EMPTY_ITEM = (categoryId = ''): Omit<MenuItem, 'id'> => ({
-  name: '', description: '', basePrice: 0, imageUrl: '',
-  isAvailable: true, sortOrder: 0, categoryId, modifierGroups: [],
+const EMPTY_MODIFIER = (): Modifier => ({
+  name: '', priceAdjustment: 0, isAvailable: true,
 });
 
-// ─── Emoji fallback ───────────────────────────────────
+const EMPTY_GROUP = (): ModifierGroup => ({
+  name: '', required: false, multiSelect: false,
+  modifiers: [EMPTY_MODIFIER()],
+});
+
+const EMPTY_ITEM = (categoryId = ''): Omit<MenuItem, 'id'> => ({
+  name: '', description: '', basePrice: 0, imageUrl: '',
+  isAvailable: true, sortOrder: 0, categoryId,
+  modifierGroups: [],
+});
+
+// ─── Emoji fallback by keyword ────────────────────────
 
 const ITEM_EMOJI = (name: string) => {
   const n = name.toLowerCase();
@@ -81,24 +90,31 @@ const ITEM_EMOJI = (name: string) => {
 
 // ─── Image Upload Component ────────────────────────
 
-function ImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+function ImageUpload({
+  value, onChange
+}: {
+  value: string;
+  onChange: (url: string) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const preview = value;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { toast.error('Image must be under 3MB'); return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error('Max 3MB'); return; }
     const reader = new FileReader();
-    reader.onload = () => onChange(reader.result as string);
+    reader.onload = (ev) => onChange(ev.target?.result as string);
     reader.readAsDataURL(file);
   };
 
   return (
     <div>
-      <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">Item Photo</label>
+      <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">
+        Item Image
+      </label>
       <div
-        className="relative w-full h-36 rounded-2xl border-2 border-dashed border-[#222228] bg-[#0a0a0b] flex items-center justify-center cursor-pointer hover:border-amber-500/30 transition-colors group overflow-hidden"
+        className="relative h-36 rounded-2xl border-2 border-dashed border-[#2a2a30] flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500/50 transition-all group"
         onClick={() => fileRef.current?.click()}
       >
         {preview ? (
@@ -119,6 +135,7 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (url: strin
         )}
       </div>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+
       <div className="flex gap-2 mt-2">
         <input
           className="flex-1 px-3 py-2 rounded-xl bg-[#0f0f11] border border-[#222228] text-[#f2f2f5] text-xs placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40"
@@ -127,8 +144,11 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (url: strin
           onChange={(e) => onChange(e.target.value)}
         />
         {preview && (
-          <button type="button" onClick={() => onChange('')}
-            className="px-3 py-2 rounded-xl text-red-400 text-xs border border-red-500/20 hover:bg-red-500/10 transition-colors">
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="px-3 py-2 rounded-xl text-red-400 text-xs border border-red-500/20 hover:bg-red-500/10 transition-colors"
+          >
             Remove
           </button>
         )}
@@ -137,78 +157,159 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (url: strin
   );
 }
 
-// ─── Modifier Group Picker (NEW) ──────────────────────
-//  Shows all standalone groups. Admin checks which to attach.
+// ─── Modifier Group Builder ────────────────────────
 
-function ModifierGroupPicker({
-  allGroups,
-  selectedIds,
+function ModifierGroupBuilder({
+  groups,
   onChange,
 }: {
-  allGroups: ModifierGroup[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
+  groups: ModifierGroup[];
+  onChange: (groups: ModifierGroup[]) => void;
 }) {
-  const toggle = (id: string) =>
-    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  const updateGroup = (gi: number, patch: Partial<ModifierGroup>) => {
+    onChange(groups.map((g, i) => i === gi ? { ...g, ...patch } : g));
+  };
 
-  if (allGroups.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-[#222228] p-6 text-center">
-        <SlidersHorizontal size={24} className="mx-auto text-[#2a2a30] mb-2" />
-        <p className="text-[#3a3a48] text-sm font-semibold">No modifier groups yet</p>
-        <p className="text-[#2a2a30] text-xs mt-1">
-          Go to{' '}
-          <a href="/admin/modifiers" target="_blank" className="text-amber-500 hover:underline">
-            Admin → Modifiers
-          </a>{' '}
-          to create reusable groups first.
-        </p>
-      </div>
+  const removeGroup = (gi: number) => {
+    onChange(groups.filter((_, i) => i !== gi));
+  };
+
+  const addMod = (gi: number) => {
+    const updated = groups.map((g, i) =>
+      i === gi ? { ...g, modifiers: [...g.modifiers, EMPTY_MODIFIER()] } : g
     );
-  }
+    onChange(updated);
+  };
+
+  const updateMod = (gi: number, mi: number, patch: Partial<Modifier>) => {
+    onChange(groups.map((g, i) =>
+      i === gi
+        ? { ...g, modifiers: g.modifiers.map((m, j) => j === mi ? { ...m, ...patch } : m) }
+        : g
+    ));
+  };
+
+  const removeMod = (gi: number, mi: number) => {
+    onChange(groups.map((g, i) =>
+      i === gi ? { ...g, modifiers: g.modifiers.filter((_, j) => j !== mi) } : g
+    ));
+  };
 
   return (
-    <div className="space-y-2">
-      {allGroups.map((group) => {
-        const checked = selectedIds.includes(group.id);
-        return (
-          <button
-            key={group.id}
-            type="button"
-            onClick={() => toggle(group.id)}
-            className={clsx(
-              'w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left',
-              checked
-                ? 'bg-amber-500/10 border-amber-500/30'
-                : 'bg-[#0a0a0b] border-[#1e1e22] hover:border-[#333340]'
-            )}
-          >
-            <div className={clsx(
-              'w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all',
-              checked ? 'bg-amber-500 border-amber-500' : 'border-[#3a3a48]'
-            )}>
-              {checked && <Check size={11} className="text-white" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={clsx('font-semibold text-sm', checked ? 'text-amber-300' : 'text-[#d4d4dc]')}>
-                  {group.name}
-                </span>
-                {group.required && (
-                  <span className="text-[9px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full font-bold">Required</span>
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <label className="text-xs font-bold text-[#4a4a58] uppercase tracking-wider">
+          Modifier Groups ({groups.length})
+        </label>
+        <button
+          type="button"
+          onClick={() => onChange([...groups, EMPTY_GROUP()])}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/25 text-[11px] font-bold hover:bg-amber-500/25 transition-colors"
+        >
+          <Plus size={11} /> Add Group
+        </button>
+      </div>
+
+      {groups.length === 0 && (
+        <div className="rounded-xl border border-dashed border-[#222228] p-5 text-center">
+          <p className="text-[#3a3a48] text-xs">No modifier groups yet</p>
+          <p className="text-[#2a2a30] text-[11px] mt-0.5">e.g. Size, Extras, Sauce, Toppings</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {groups.map((group, gi) => (
+          <div key={gi} className="rounded-2xl bg-[#0a0a0b] border border-[#1e1e22] overflow-hidden">
+            {/* Group header */}
+            <div className="flex items-center gap-2 p-3 bg-[#111113] border-b border-[#1e1e22]">
+              <GripVertical size={13} className="text-[#3a3a48] flex-shrink-0" />
+              <input
+                className="flex-1 bg-transparent text-[#d4d4dc] text-sm font-semibold placeholder:text-[#3a3a48] outline-none"
+                placeholder="Group name (e.g. Size, Sauce)"
+                value={group.name}
+                onChange={(e) => updateGroup(gi, { name: e.target.value })}
+              />
+              {/* Required toggle */}
+              <button
+                type="button"
+                onClick={() => updateGroup(gi, { required: !group.required })}
+                className={clsx(
+                  'text-[10px] px-2 py-1 rounded-lg font-bold border transition-all flex-shrink-0',
+                  group.required
+                    ? 'bg-red-500/15 text-red-400 border-red-500/25'
+                    : 'bg-[#1e1e22] text-[#4a4a58] border-[#2a2a30] hover:border-[#3a3a40]'
                 )}
-                {group.multiSelect && (
-                  <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full font-bold">Multi</span>
+                title={group.required ? 'Required (click to make optional)' : 'Optional (click to make required)'}
+              >
+                {group.required ? '★ Required' : '☆ Optional'}
+              </button>
+              {/* Multi-select toggle */}
+              <button
+                type="button"
+                onClick={() => updateGroup(gi, { multiSelect: !group.multiSelect })}
+                className={clsx(
+                  'text-[10px] px-2 py-1 rounded-lg font-bold border transition-all flex-shrink-0',
+                  group.multiSelect
+                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/25'
+                    : 'bg-[#1e1e22] text-[#4a4a58] border-[#2a2a30] hover:border-[#3a3a40]'
                 )}
-              </div>
-              <div className="text-[11px] text-[#4a4a58] mt-0.5">
-                {group.modifiers.map((m) => m.name).join(', ')}
-              </div>
+                title={group.multiSelect ? 'Multi-select' : 'Single-select'}
+              >
+                {group.multiSelect ? '⊡ Multi' : '⊙ Single'}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeGroup(gi)}
+                className="p-1.5 rounded-lg text-[#4a4a58] hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
+              >
+                <X size={13} />
+              </button>
             </div>
-          </button>
-        );
-      })}
+
+            {/* Modifiers */}
+            <div className="p-3 space-y-2">
+              {group.modifiers.map((mod, mi) => (
+                <div key={mi} className="flex items-center gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#111113] border border-[#222228] text-[#d4d4dc] text-sm placeholder:text-[#3a3a48] outline-none focus:border-amber-500/30"
+                    placeholder="Option name (e.g. Large, Extra Cheese)"
+                    value={mod.name}
+                    onChange={(e) => updateMod(gi, mi, { name: e.target.value })}
+                  />
+                  <div className="relative w-24">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#4a4a58] text-xs">+$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.25"
+                      className="w-full pl-7 pr-2 py-2 rounded-lg bg-[#111113] border border-[#222228] text-[#d4d4dc] text-sm outline-none focus:border-amber-500/30"
+                      placeholder="0.00"
+                      value={mod.priceAdjustment || ''}
+                      onChange={(e) => updateMod(gi, mi, { priceAdjustment: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeMod(gi, mi)}
+                    disabled={group.modifiers.length <= 1}
+                    className="p-2 rounded-lg text-[#3a3a48] hover:text-red-400 hover:bg-red-500/10 disabled:opacity-20 transition-all flex-shrink-0"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => addMod(gi)}
+                className="w-full py-2 rounded-lg border border-dashed border-[#2a2a30] text-[#4a4a58] text-[11px] font-semibold hover:border-amber-500/30 hover:text-amber-500/70 transition-all"
+              >
+                + Add Option
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -216,17 +317,20 @@ function ModifierGroupPicker({
 // ─── Item Form Panel (slide-in) ────────────────────
 
 interface FormState {
-  name:             string;
-  description:      string;
-  basePrice:        number | '';
-  imageUrl:         string;
-  categoryId:       string;
-  isAvailable:      boolean;
-  modifierGroupIds: string[];
+  name:           string;
+  description:    string;
+  basePrice:      number | '';
+  imageUrl:       string;
+  categoryId:     string;
+  isAvailable:    boolean;
+  modifierGroups: ModifierGroup[];
 }
 
 function ItemFormPanel({
-  editItem, categories, onSave, onClose,
+  editItem,
+  categories,
+  onSave,
+  onClose,
 }: {
   editItem: MenuItem | null;
   categories: Category[];
@@ -236,45 +340,57 @@ function ItemFormPanel({
   const [form, setForm] = useState<FormState>(() =>
     editItem
       ? {
-          name:             editItem.name,
-          description:      editItem.description ?? '',
-          basePrice:        editItem.basePrice,
-          imageUrl:         editItem.imageUrl ?? '',
-          categoryId:       editItem.categoryId,
-          isAvailable:      editItem.isAvailable,
-          modifierGroupIds: editItem.modifierGroups.map((g) => g.id),
+          name:           editItem.name,
+          description:    editItem.description ?? '',
+          basePrice:      editItem.basePrice,
+          imageUrl:       editItem.imageUrl ?? '',
+          categoryId:     editItem.categoryId,
+          isAvailable:    editItem.isAvailable,
+          modifierGroups: editItem.modifierGroups ?? [],
         }
       : {
           name: '', description: '', basePrice: '',
           imageUrl: '', categoryId: categories[0]?.id ?? '',
-          isAvailable: true, modifierGroupIds: [],
+          isAvailable: true, modifierGroups: [],
         }
   );
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'modifiers'>('basic');
-  const [allGroups, setAllGroups] = useState<ModifierGroup[]>([]);
-
-  useEffect(() => {
-    modifierGroupApi.getAll().then((res) => setAllGroups(res.data.data)).catch(() => {});
-  }, []);
 
   const update = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
   const handleSave = async () => {
-    if (!form.name.trim())                              { toast.error('Item name is required'); return; }
+    if (!form.name.trim()) { toast.error('Item name is required'); return; }
     if (form.basePrice === '' || isNaN(Number(form.basePrice))) { toast.error('Valid price required'); return; }
-    if (!form.categoryId)                               { toast.error('Select a category'); return; }
+    if (!form.categoryId) { toast.error('Select a category'); return; }
+
+    // Validate modifier groups
+    for (const g of form.modifierGroups) {
+      if (!g.name.trim()) { toast.error('All modifier groups need a name'); return; }
+      for (const m of g.modifiers) {
+        if (!m.name.trim()) { toast.error('All modifier options need a name'); return; }
+      }
+    }
 
     setSaving(true);
     try {
       const payload = {
-        name:             form.name.trim(),
-        description:      form.description.trim() || undefined,
-        basePrice:        Number(form.basePrice),
-        imageUrl:         form.imageUrl || null,
-        categoryId:       form.categoryId,
-        isAvailable:      form.isAvailable,
-        modifierGroupIds: form.modifierGroupIds,
+        name:           form.name.trim(),
+        description:    form.description.trim() || undefined,
+        basePrice:      Number(form.basePrice),
+        imageUrl:       form.imageUrl || null,
+        categoryId:     form.categoryId,
+        isAvailable:    form.isAvailable,
+        modifierGroups: form.modifierGroups.map((g) => ({
+          name:        g.name,
+          required:    g.required,
+          multiSelect: g.multiSelect,
+          modifiers:   g.modifiers.map((m) => ({
+            name:            m.name,
+            priceAdjustment: m.priceAdjustment,
+            isAvailable:     true,
+          })),
+        })),
       };
 
       let savedItem: MenuItem;
@@ -295,10 +411,12 @@ function ItemFormPanel({
     }
   };
 
+  const totalModCount = form.modifierGroups.reduce((s, g) => s + g.modifiers.length, 0);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-xl bg-[#0c0c0e] border-l border-[#1e1e22] h-full flex flex-col animate-slide-up overflow-hidden">
-        {/* Header */}
+        {/* Panel header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e1e22] bg-[#0f0f11] flex-shrink-0">
           <div>
             <h2 className="font-display font-black text-[#f2f2f5] text-lg leading-tight">
@@ -308,7 +426,10 @@ function ItemFormPanel({
               {editItem ? `Editing "${editItem.name}"` : 'Fill in the details below'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2.5 rounded-xl text-[#4a4a58] hover:text-[#f2f2f5] hover:bg-[#1e1e22] transition-all">
+          <button
+            onClick={onClose}
+            className="p-2.5 rounded-xl text-[#4a4a58] hover:text-[#f2f2f5] hover:bg-[#1e1e22] transition-all"
+          >
             <X size={18} />
           </button>
         </div>
@@ -316,8 +437,8 @@ function ItemFormPanel({
         {/* Tab switcher */}
         <div className="flex border-b border-[#1e1e22] flex-shrink-0 bg-[#0f0f11]">
           {[
-            { key: 'basic',     label: 'Item Details', badge: null },
-            { key: 'modifiers', label: 'Modifiers',    badge: form.modifierGroupIds.length > 0 ? String(form.modifierGroupIds.length) : null },
+            { key: 'basic',     label: 'Item Details',  badge: null },
+            { key: 'modifiers', label: 'Modifiers',     badge: form.modifierGroups.length > 0 ? String(form.modifierGroups.length) : null },
           ].map((t) => (
             <button
               key={t.key}
@@ -339,12 +460,17 @@ function ItemFormPanel({
           ))}
         </div>
 
-        {/* Body */}
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'basic' && (
             <div className="space-y-5">
-              <ImageUpload value={form.imageUrl} onChange={(url) => update({ imageUrl: url })} />
+              {/* Image upload */}
+              <ImageUpload
+                value={form.imageUrl}
+                onChange={(url) => update({ imageUrl: url })}
+              />
 
+              {/* Name */}
               <div>
                 <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">
                   Item Name <span className="text-red-400">*</span>
@@ -357,19 +483,25 @@ function ItemFormPanel({
                 />
               </div>
 
+              {/* Description */}
               <div>
-                <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">Description</label>
+                <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">
+                  Description
+                </label>
                 <textarea
                   className="w-full px-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40 resize-none transition-colors leading-relaxed"
                   rows={3}
-                  maxLength={500}
                   placeholder="Short description for customers (max 500 chars)"
+                  maxLength={500}
                   value={form.description}
                   onChange={(e) => update({ description: e.target.value })}
                 />
-                <div className="text-right text-[10px] text-[#3a3a48] mt-1">{form.description.length}/500</div>
+                <div className="text-right text-[10px] text-[#3a3a48] mt-1">
+                  {form.description.length}/500
+                </div>
               </div>
 
+              {/* Price + Category row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">
@@ -378,7 +510,9 @@ function ItemFormPanel({
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4a4a58] text-sm font-bold">$</span>
                     <input
-                      type="number" min="0" step="0.25"
+                      type="number"
+                      min="0"
+                      step="0.25"
                       className="w-full pl-7 pr-4 py-3 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40 transition-colors"
                       placeholder="0.00"
                       value={form.basePrice}
@@ -386,6 +520,7 @@ function ItemFormPanel({
                     />
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-[#4a4a58] uppercase tracking-wider mb-2">
                     Category <span className="text-red-400">*</span>
@@ -434,9 +569,10 @@ function ItemFormPanel({
                   <div className="text-left">
                     <div className="text-sm font-semibold text-[#d4d4dc]">Modifier Groups</div>
                     <div className="text-[11px] text-[#4a4a58]">
-                      {form.modifierGroupIds.length === 0
-                        ? 'Attach size, extras, sauces...'
-                        : `${form.modifierGroupIds.length} group${form.modifierGroupIds.length !== 1 ? 's' : ''} attached`}
+                      {form.modifierGroups.length === 0
+                        ? 'Add size, extras, sauces...'
+                        : `${form.modifierGroups.length} group${form.modifierGroups.length !== 1 ? 's' : ''} · ${totalModCount} option${totalModCount !== 1 ? 's' : ''}`
+                      }
                     </div>
                   </div>
                 </div>
@@ -446,26 +582,10 @@ function ItemFormPanel({
           )}
 
           {activeTab === 'modifiers' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-xs font-bold text-[#4a4a58] uppercase tracking-wider">Attach Modifier Groups</div>
-                  <div className="text-[11px] text-[#2a2a30] mt-0.5">Select which groups apply to this item</div>
-                </div>
-                <a
-                  href="/admin/modifiers"
-                  target="_blank"
-                  className="text-[11px] text-amber-500 hover:text-amber-400 flex items-center gap-1 border border-amber-500/20 px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 transition-all"
-                >
-                  <SlidersHorizontal size={11} /> Manage Groups
-                </a>
-              </div>
-              <ModifierGroupPicker
-                allGroups={allGroups}
-                selectedIds={form.modifierGroupIds}
-                onChange={(ids) => update({ modifierGroupIds: ids })}
-              />
-            </div>
+            <ModifierGroupBuilder
+              groups={form.modifierGroups}
+              onChange={(groups) => update({ modifierGroups: groups })}
+            />
           )}
         </div>
 
@@ -489,7 +609,10 @@ function ItemFormPanel({
                   Saving...
                 </span>
               ) : (
-                <><Check size={15} /> {editItem ? 'Save Changes' : 'Create Item'}</>
+                <>
+                  <Check size={15} />
+                  {editItem ? 'Save Changes' : 'Create Item'}
+                </>
               )}
             </button>
           </div>
@@ -499,25 +622,27 @@ function ItemFormPanel({
   );
 }
 
-// ─── Category Modal ────────────────────────────────────
+// ─── Category Modal ────────────────────────────────
 
 function CategoryModal({
-  categories, onClose, onRefresh,
+  categories,
+  onClose,
+  onRefresh,
 }: {
   categories: Category[];
   onClose: () => void;
   onRefresh: () => void;
 }) {
-  const [name,    setName]    = useState('');
+  const [name, setName]         = useState('');
   const [creating, setCreating] = useState(false);
-  const [editing,  setEditing]  = useState<string | null>(null);
+  const [editing, setEditing]   = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
   const handleCreate = async () => {
     if (!name.trim()) return;
     setCreating(true);
     try {
-      await menuApi.createCategory(name.trim(), categories.length);
+      await menuApi.createCategory({ name: name.trim(), sortOrder: categories.length });
       setName('');
       onRefresh();
       toast.success(`Category "${name.trim()}" created!`);
@@ -542,7 +667,10 @@ function CategoryModal({
 
   const handleDelete = async (cat: Category) => {
     const count = cat._count?.items ?? cat.items?.length ?? 0;
-    if (count > 0) { toast.error(`Move or delete the ${count} items in "${cat.name}" first`); return; }
+    if (count > 0) {
+      toast.error(`Move or delete the ${count} items in "${cat.name}" first`);
+      return;
+    }
     if (!confirm(`Delete category "${cat.name}"?`)) return;
     try {
       await menuApi.deleteCategory(cat.id);
@@ -557,6 +685,7 @@ function CategoryModal({
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
       onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-md bg-[#111113] rounded-3xl border border-[#222228] overflow-hidden animate-scale-pop">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e1e22]">
           <h2 className="font-display font-bold text-[#f2f2f5] text-base">Manage Categories</h2>
           <button onClick={onClose} className="p-2 rounded-xl text-[#4a4a58] hover:text-[#f2f2f5] hover:bg-[#1e1e22] transition-all">
@@ -564,6 +693,7 @@ function CategoryModal({
           </button>
         </div>
 
+        {/* Add category */}
         <div className="px-6 py-4 border-b border-[#1a1a1e]">
           <div className="flex gap-2">
             <input
@@ -576,13 +706,14 @@ function CategoryModal({
             <button
               onClick={handleCreate}
               disabled={!name.trim() || creating}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+              className="btn-press px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
             >
               <Plus size={15} />
             </button>
           </div>
         </div>
 
+        {/* Categories list */}
         <div className="max-h-80 overflow-y-auto px-3 py-3">
           {categories.length === 0 && (
             <p className="text-center text-[#3a3a48] text-sm py-8">No categories yet</p>
@@ -592,6 +723,7 @@ function CategoryModal({
             return (
               <div key={cat.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#1a1a1e] group transition-colors">
                 <GripVertical size={13} className="text-[#2a2a30]" />
+
                 {editing === cat.id ? (
                   <input
                     autoFocus
@@ -610,6 +742,7 @@ function CategoryModal({
                     <span className="text-[#3a3a48] text-[11px] ml-2">{count} item{count !== 1 ? 's' : ''}</span>
                   </div>
                 )}
+
                 {editing !== cat.id && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -669,54 +802,75 @@ export default function AdminMenuPage() {
 
   useEffect(() => { fetchMenu(); }, []);
 
+  // ── Stats ──────────────────────────────────────────
   const totalItems    = categories.reduce((s, c) => s + (c.items?.length ?? 0), 0);
   const withImages    = categories.reduce((s, c) => s + (c.items?.filter((i) => i.imageUrl)?.length ?? 0), 0);
   const unavailable   = categories.reduce((s, c) => s + (c.items?.filter((i) => !i.isAvailable)?.length ?? 0), 0);
   const withModifiers = categories.reduce((s, c) => s + (c.items?.filter((i) => i.modifierGroups?.length > 0)?.length ?? 0), 0);
 
+  // ── Active category items ──────────────────────────
   const activeItems = categories.find((c) => c.id === activeCategory)?.items ?? [];
 
+  // ── Availability toggles ───────────────────────────
   const toggleItem = async (item: MenuItem) => {
     const newVal = !item.isAvailable;
-    setCategories((cats) => cats.map((cat) => ({
-      ...cat,
-      items: cat.items?.map((i) => i.id === item.id ? { ...i, isAvailable: newVal } : i) ?? [],
-    })));
+    setCategories((cats) =>
+      cats.map((cat) => ({
+        ...cat,
+        items: cat.items?.map((i) => i.id === item.id ? { ...i, isAvailable: newVal } : i) ?? [],
+      }))
+    );
     try {
-      await kitchenApi.setItemAvailability(item.id, newVal);
+      await menuApi.setItemAvailability(item.id, newVal);
       toast.success(`"${item.name}" ${newVal ? 'enabled' : 'disabled'}`);
     } catch {
       toast.error('Failed to update');
-      setCategories((cats) => cats.map((cat) => ({
-        ...cat,
-        items: cat.items?.map((i) => i.id === item.id ? { ...i, isAvailable: !newVal } : i) ?? [],
-      })));
+      setCategories((cats) =>
+        cats.map((cat) => ({
+          ...cat,
+          items: cat.items?.map((i) => i.id === item.id ? { ...i, isAvailable: !newVal } : i) ?? [],
+        }))
+      );
     }
   };
 
   const toggleModifier = async (itemId: string, mod: { id: string; name: string; isAvailable: boolean }) => {
     const newVal = !mod.isAvailable;
-    setCategories((cats) => cats.map((cat) => ({
-      ...cat,
-      items: cat.items?.map((item) =>
-        item.id === itemId
-          ? { ...item, modifierGroups: item.modifierGroups?.map((g) => ({ ...g, modifiers: g.modifiers?.map((m) => m.id === mod.id ? { ...m, isAvailable: newVal } : m) ?? [] })) ?? [] }
-          : item
-      ) ?? [],
-    })));
+    setCategories((cats) =>
+      cats.map((cat) => ({
+        ...cat,
+        items: cat.items?.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                modifierGroups: item.modifierGroups?.map((g) => ({
+                  ...g,
+                  modifiers: g.modifiers?.map((m) => m.id === mod.id ? { ...m, isAvailable: newVal } : m) ?? [],
+                })) ?? [],
+              }
+            : item
+        ) ?? [],
+      }))
+    );
     try {
-      await kitchenApi.setModifierAvailability(mod.id, newVal);
+      await menuApi.setModifierAvailability(mod.id!, newVal);
     } catch {
       toast.error('Failed to update modifier');
     }
   };
 
+  // ── Delete item ────────────────────────────────────
   const handleDelete = async (item: MenuItem) => {
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
     setDeleting(item.id);
     try {
       await menuApi.deleteItem(item.id);
-      setCategories((cats) => cats.map((cat) => ({ ...cat, items: cat.items?.filter((i) => i.id !== item.id) ?? [] })));
+      setCategories((cats) =>
+        cats.map((cat) => ({
+          ...cat,
+          items: cat.items?.filter((i) => i.id !== item.id) ?? [],
+        }))
+      );
       toast.success(`"${item.name}" deleted`);
     } catch {
       toast.error('Failed to delete item');
@@ -725,38 +879,60 @@ export default function AdminMenuPage() {
     }
   };
 
+  // ── Form callbacks ─────────────────────────────────
   const handleSaved = (savedItem: MenuItem) => {
-    setCategories((cats) => cats.map((cat) => {
-      const filteredItems = cat.items?.filter((i) => i.id !== savedItem.id) ?? [];
-      if (cat.id === savedItem.categoryId) {
+    setCategories((cats) =>
+      cats.map((cat) => {
         const exists = cat.items?.some((i) => i.id === savedItem.id);
-        return { ...cat, items: exists ? cat.items.map((i) => (i.id === savedItem.id ? savedItem : i)) : [...filteredItems, savedItem] };
-      }
-      return { ...cat, items: filteredItems };
-    }));
+        const filteredItems = cat.items?.filter((i) => i.id !== savedItem.id) ?? [];
+
+        if (cat.id === savedItem.categoryId) {
+          return {
+            ...cat,
+            items: exists
+              ? cat.items.map((i) => (i.id === savedItem.id ? savedItem : i))
+              : [...filteredItems, savedItem],
+          };
+        }
+        // Item moved to different category — remove from old
+        return { ...cat, items: filteredItems };
+      })
+    );
     setShowForm(false);
     setEditItem(null);
+    // Auto-navigate to the saved item's category
     setActiveCategory(savedItem.categoryId);
+  };
+
+  const openCreate = () => {
+    setEditItem(null);
+    setShowForm(true);
   };
 
   const openEdit = async (item: MenuItem) => {
     try {
+      // Fetch full item with modifiers
       const res = await menuApi.getItem(item.id);
       setEditItem(res.data.data);
       setShowForm(true);
     } catch {
+      // Fallback to local data
       setEditItem(item);
       setShowForm(true);
     }
   };
 
   const toggleExpand = (id: string) => {
-    setExpanded((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Top bar */}
+      {/* ── Top bar ─────────────────────────────────── */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#1a1a1e]">
         <div>
           <h1 className="font-display font-bold text-2xl text-[#f2f2f5]">Menu Management</h1>
@@ -766,9 +942,15 @@ export default function AdminMenuPage() {
             <span className="text-blue-400">{withImages} with images</span>
             <span className="text-blue-400/70">·</span>
             <span className="text-purple-400">{withModifiers} with modifiers</span>
-            {unavailable > 0 && (<><span className="text-blue-400/70">·</span><span className="text-red-400">{unavailable} unavailable</span></>)}
+            {unavailable > 0 && (
+              <>
+                <span className="text-blue-400/70">·</span>
+                <span className="text-red-400">{unavailable} unavailable</span>
+              </>
+            )}
           </div>
         </div>
+
         <div className="flex gap-2">
           <button
             onClick={() => setShowCatModal(true)}
@@ -777,8 +959,8 @@ export default function AdminMenuPage() {
             <FolderPlus size={15} /> Categories
           </button>
           <button
-            onClick={() => { setEditItem(null); setShowForm(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-display font-bold text-sm transition-colors shadow-lg shadow-amber-500/20"
+            onClick={openCreate}
+            className="btn-press flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-display font-bold text-sm transition-colors shadow-lg shadow-amber-500/20"
           >
             <Plus size={15} /> Add Item
           </button>
@@ -791,7 +973,7 @@ export default function AdminMenuPage() {
         </div>
       ) : (
         <div className="flex flex-1 overflow-hidden">
-          {/* Category sidebar */}
+          {/* ── Category sidebar ──────────────────────── */}
           <div className="w-52 border-r border-[#1a1a1e] overflow-y-auto flex-shrink-0 py-3">
             <div className="px-3 mb-2">
               <span className="text-[10px] font-bold text-[#3a3a48] uppercase tracking-widest">Categories</span>
@@ -799,7 +981,12 @@ export default function AdminMenuPage() {
             {categories.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <p className="text-[#3a3a48] text-xs">No categories</p>
-                <button onClick={() => setShowCatModal(true)} className="mt-3 text-amber-500 text-xs font-semibold">+ Add one</button>
+                <button
+                  onClick={() => setShowCatModal(true)}
+                  className="mt-3 text-amber-500 text-xs font-semibold"
+                >
+                  + Add one
+                </button>
               </div>
             ) : (
               categories.map((cat) => (
@@ -814,7 +1001,10 @@ export default function AdminMenuPage() {
                   )}
                 >
                   <span className="truncate">{cat.name}</span>
-                  <span className={clsx('text-[11px] ml-2 flex-shrink-0 px-1.5 py-0.5 rounded-full', cat.id === activeCategory ? 'bg-amber-500/20 text-amber-400' : 'text-[#3a3a48]')}>
+                  <span className={clsx(
+                    'text-[11px] ml-2 flex-shrink-0 px-1.5 py-0.5 rounded-full',
+                    cat.id === activeCategory ? 'bg-amber-500/20 text-amber-400' : 'text-[#3a3a48]'
+                  )}>
                     {cat.items?.length ?? 0}
                   </span>
                 </button>
@@ -822,8 +1012,9 @@ export default function AdminMenuPage() {
             )}
           </div>
 
-          {/* Items list */}
+          {/* ── Items list ────────────────────────────── */}
           <div className="flex-1 overflow-y-auto p-5">
+            {/* Empty state */}
             {categories.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-20">
                 <div className="text-6xl mb-4">🧀</div>
@@ -841,7 +1032,7 @@ export default function AdminMenuPage() {
                 <Package size={36} className="text-[#2a2a30] mb-3" />
                 <div className="font-display font-bold text-[#3a3a48]">No items in this category</div>
                 <button
-                  onClick={() => { setEditItem(null); setShowForm(true); }}
+                  onClick={openCreate}
                   className="mt-4 flex items-center gap-2 px-4 py-2.5 bg-amber-500/15 text-amber-400 border border-amber-500/25 rounded-xl text-sm font-bold"
                 >
                   <Plus size={14} /> Add First Item
@@ -849,6 +1040,7 @@ export default function AdminMenuPage() {
               </div>
             ) : (
               <div className="space-y-2.5">
+                {/* Category header */}
                 <div className="flex items-center gap-3 mb-4">
                   <h2 className="font-display font-bold text-[#f2f2f5] text-lg">
                     {categories.find((c) => c.id === activeCategory)?.name}
@@ -858,18 +1050,28 @@ export default function AdminMenuPage() {
                 </div>
 
                 {activeItems.map((item) => {
-                  const isExpanded   = expanded.has(item.id);
+                  const isExpanded = expanded.has(item.id);
                   const hasModifiers = item.modifierGroups?.length > 0;
+
                   return (
-                    <div key={item.id} className="rounded-2xl bg-[#0f0f11] border border-[#1e1e22] overflow-hidden animate-fade-in">
+                    <div
+                      key={item.id}
+                      className="rounded-2xl bg-[#0f0f11] border border-[#1e1e22] overflow-hidden animate-fade-in"
+                    >
+                      {/* Item row */}
                       <div className="flex items-center gap-3 p-3.5">
+                        {/* Expand toggle */}
                         <button
                           onClick={() => hasModifiers && toggleExpand(item.id)}
-                          className={clsx('flex-shrink-0 text-[#3a3a48] transition-colors', hasModifiers ? 'hover:text-[#9898a5] cursor-pointer' : 'opacity-0 pointer-events-none')}
+                          className={clsx(
+                            'flex-shrink-0 text-[#3a3a48] transition-colors',
+                            hasModifiers ? 'hover:text-[#9898a5] cursor-pointer' : 'opacity-0 pointer-events-none'
+                          )}
                         >
                           {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                         </button>
 
+                        {/* Thumbnail */}
                         <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-[#1a1a1e] flex items-center justify-center">
                           {item.imageUrl ? (
                             <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
@@ -878,47 +1080,81 @@ export default function AdminMenuPage() {
                           )}
                         </div>
 
+                        {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <div className={clsx('font-semibold text-sm', item.isAvailable ? 'text-[#d4d4dc]' : 'text-[#4a4a58] line-through')}>
+                          <div className={clsx(
+                            'font-semibold text-sm',
+                            item.isAvailable ? 'text-[#d4d4dc]' : 'text-[#4a4a58] line-through'
+                          )}>
                             {item.name}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="font-display font-bold text-amber-400 text-sm">${item.basePrice.toFixed(2)}</span>
+                            <span className="font-display font-bold text-amber-400 text-sm">
+                              ${item.basePrice.toFixed(2)}
+                            </span>
                             {item.description && (
-                              <span className="text-[11px] text-[#4a4a58] truncate max-w-[200px]">{item.description}</span>
+                              <span className="text-[11px] text-[#4a4a58] truncate max-w-[200px]">
+                                {item.description}
+                              </span>
                             )}
                             {hasModifiers && (
                               <span className="text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded-full font-semibold">
-                                {item.modifierGroups.length} group{item.modifierGroups.length !== 1 ? 's' : ''}
+                                {item.modifierGroups.length} mod group{item.modifierGroups.length !== 1 ? 's' : ''}
                               </span>
                             )}
                           </div>
                         </div>
 
+                        {/* Actions */}
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <button onClick={() => openEdit(item)} className="p-2 rounded-xl text-[#4a4a58] hover:text-amber-400 hover:bg-amber-500/10 transition-all" title="Edit item">
+                          {/* Edit */}
+                          <button
+                            onClick={() => openEdit(item)}
+                            className="p-2 rounded-xl text-[#4a4a58] hover:text-amber-400 hover:bg-amber-500/10 transition-all"
+                            title="Edit item"
+                          >
                             <Pencil size={14} />
                           </button>
-                          <button onClick={() => handleDelete(item)} disabled={deleting === item.id} className="p-2 rounded-xl text-[#4a4a58] hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50" title="Delete item">
+
+                          {/* Delete */}
+                          <button
+                            onClick={() => handleDelete(item)}
+                            disabled={deleting === item.id}
+                            className="p-2 rounded-xl text-[#4a4a58] hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
+                            title="Delete item"
+                          >
                             <Trash2 size={14} />
                           </button>
+
+                          {/* Availability toggle */}
                           <button
                             onClick={() => toggleItem(item)}
                             className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${item.isAvailable ? 'bg-emerald-500' : 'bg-[#2a2a30]'}`}
+                            title={item.isAvailable ? 'Click to disable' : 'Click to enable'}
                           >
-                            <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: item.isAvailable ? '22px' : '2px' }} />
+                            <div
+                              className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                              style={{ left: item.isAvailable ? '22px' : '2px' }}
+                            />
                           </button>
                         </div>
                       </div>
 
+                      {/* Expanded modifier list */}
                       {isExpanded && hasModifiers && (
                         <div className="bg-[#080809] px-5 py-4 border-t border-[#1a1a1e] animate-fade-in">
                           {item.modifierGroups.map((group) => (
                             <div key={group.id} className="mb-3 last:mb-0">
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-[11px] text-[#4a4a58] font-bold uppercase tracking-wider">{group.name}</span>
-                                {group.required && <span className="text-[9px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full font-bold">Required</span>}
-                                {group.multiSelect && <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full font-bold">Multi</span>}
+                                <span className="text-[11px] text-[#4a4a58] font-bold uppercase tracking-wider">
+                                  {group.name}
+                                </span>
+                                {group.required && (
+                                  <span className="text-[9px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full font-bold">Required</span>
+                                )}
+                                {group.multiSelect && (
+                                  <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full font-bold">Multi</span>
+                                )}
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {group.modifiers?.map((mod) => (
@@ -934,13 +1170,18 @@ export default function AdminMenuPage() {
                                   >
                                     <span className={`w-1.5 h-1.5 rounded-full ${mod.isAvailable ? 'bg-emerald-400' : 'bg-red-400'}`} />
                                     {mod.name}
-                                    {mod.priceAdjustment > 0 && <span className="opacity-50">+${mod.priceAdjustment.toFixed(2)}</span>}
+                                    {mod.priceAdjustment > 0 && (
+                                      <span className="opacity-50">+${mod.priceAdjustment.toFixed(2)}</span>
+                                    )}
                                   </button>
                                 ))}
                               </div>
                             </div>
                           ))}
-                          <button onClick={() => openEdit(item)} className="mt-3 text-[11px] text-amber-500/70 hover:text-amber-400 flex items-center gap-1 transition-colors">
+                          <button
+                            onClick={() => openEdit(item)}
+                            className="mt-3 text-[11px] text-amber-500/70 hover:text-amber-400 flex items-center gap-1 transition-colors"
+                          >
                             <Pencil size={10} /> Edit modifier groups
                           </button>
                         </div>
@@ -954,6 +1195,7 @@ export default function AdminMenuPage() {
         </div>
       )}
 
+      {/* ── Form panel ──────────────────────────────── */}
       {showForm && (
         <ItemFormPanel
           editItem={editItem}
@@ -963,6 +1205,7 @@ export default function AdminMenuPage() {
         />
       )}
 
+      {/* ── Category modal ───────────────────────────── */}
       {showCatModal && (
         <CategoryModal
           categories={categories}

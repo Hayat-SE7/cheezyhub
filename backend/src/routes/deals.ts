@@ -62,7 +62,6 @@ dealsRouter.get('/admin', async (_req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/deals/admin — create deal
-// --- Updated dealSchema in backend/src/routes/deals.ts ---
 const dealSchema = z.object({
   title:           z.string().min(1).max(100),
   description:     z.string().max(300).optional(),
@@ -71,11 +70,8 @@ const dealSchema = z.object({
   discountType:    z.enum(['flat', 'percent']).default('flat'),
   discountValue:   z.number().min(0).default(0),
   linkedItemIds:   z.array(z.string()).default([]),
-  
-  // CHANGED: Accept simple strings and turn them into Dates
-  validFrom:       z.preprocess((val) => (val ? new Date(val as string) : undefined), z.date().optional()),
-  validTo:         z.preprocess((val) => (val ? new Date(val as string) : null), z.date().nullable().optional()),
-  
+  validFrom:       z.string().datetime().optional(),
+  validTo:         z.string().datetime().optional().nullable(),
   displayLocation: z.enum(['slider', 'deals_section', 'both']).default('both'),
   isActive:        z.boolean().default(true),
   sortOrder:       z.number().int().default(0),
@@ -87,16 +83,15 @@ dealsRouter.post('/admin', async (req: AuthenticatedRequest, res: Response) => {
     res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
     return;
   }
- const deal = await prisma.deal.create({
-  data: {
-    ...parsed.data,
-    imageUrl:      parsed.data.imageUrl || null,
-    // parsed.data.validFrom is already a Date object now!
-    validFrom:     parsed.data.validFrom || new Date(),
-    validTo:       parsed.data.validTo || null,
-    linkedItemIds: parsed.data.linkedItemIds as any,
-  },
-});
+  const deal = await prisma.deal.create({
+    data: {
+      ...parsed.data,
+      imageUrl:      parsed.data.imageUrl || null,
+      validFrom:     parsed.data.validFrom ? new Date(parsed.data.validFrom) : new Date(),
+      validTo:       parsed.data.validTo   ? new Date(parsed.data.validTo)   : null,
+      linkedItemIds: parsed.data.linkedItemIds as any,
+    },
+  });
   res.status(201).json({ success: true, data: deal });
 });
 

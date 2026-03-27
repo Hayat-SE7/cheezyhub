@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { useDeliveryStore } from '@/store/deliveryStore';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Bike, ArrowRight, MapPin, Navigation } from 'lucide-react';
 
 export default function DeliveryLoginPage() {
   const router = useRouter();
-  const login  = useAuthStore((s) => s.login);
+  const login  = useDeliveryStore((s) => s.login);
   const [username, setUsername] = useState('');
   const [pin,      setPin]      = useState('');
   const [showPin,  setShowPin]  = useState(false);
@@ -20,8 +20,9 @@ export default function DeliveryLoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ identifier: username, pin, role: 'staff' });
-      if (!['delivery','admin'].includes(res.data.data.role)) { toast.error('Delivery access required'); return; }
-      login(res.data.data.token, res.data.data.user);
+      const { token, user } = res.data.data;
+      if (!['delivery','admin'].includes(user.role)) { toast.error('Delivery access required'); return; }
+      login(token, user);
       router.replace('/delivery');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Invalid credentials');

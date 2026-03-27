@@ -14,6 +14,8 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import { sseManager } from '../services/sseManager';
+import { whatsappService } from '../services/whatsapp';
 import { validateAndPriceOrder } from '../services/inventoryService';
 import { checkDeliveryRadius, isRadiusConfigured } from '../services/radiusService';
 import { AppError } from '../middleware/errorHandler';
@@ -48,7 +50,6 @@ const placeOrderSchema = z.object({
   deliveryLat: z.number().optional(),
   deliveryLng: z.number().optional(),
   notes: z.string().max(500).optional(),
-  paymentMethod: z.enum(['cash', 'safepay']).default('cash'),
 });
 
 // ─── POST /api/orders ─────────────────────────────────
@@ -66,7 +67,7 @@ orderRouter.post(
       return;
     }
 
-    const { items, deliveryAddress, deliveryLat, deliveryLng, notes, paymentMethod } = parsed.data;
+    const { items, deliveryAddress, deliveryLat, deliveryLng, notes } = parsed.data;
 
     try {
       // 2. Load system settings
@@ -104,26 +105,26 @@ orderRouter.post(
       }
 
       // 5. Validate inventory + calculate prices
+      //    This throws descriptive errors if anything is unavailable
       const { lines, subtotal } = await validateAndPriceOrder(items);
 
       // 6. Apply fees
-      const deliveryFee    = settings?.deliveryFee    ?? 0;
-      const serviceCharge  = settings?.serviceCharge  ?? 0;
-      const total          = subtotal + deliveryFee + serviceCharge;
+      const deliveryFee = settings?.deliveryFee ?? 0;
+      const serviceCharge = settings?.serviceCharge ?? 0;
+      const total = subtotal + deliveryFee + serviceCharge;
 
       // 7. Load customer details
       const customer = await prisma.user.findUnique({
         where: { id: req.user!.userId },
+        select: { id: true, name: true, mobile: true },
       });
       if (!customer) throw new AppError('Customer not found', 404);
 
-      // 8. Create order — paymentStatus depends on method:
-      //    cash    → 'none'    (COD, kitchen sees it after /payments/create)
-      //    safepay → 'pending' (kitchen does NOT see it until webhook fires)
+      // 8. Create order in database (atomic transaction)
       const order = await prisma.order.create({
         data: {
-          orderNumber:   generateOrderNumber(),
-          customerId:    req.user!.userId,
+          orderNumber: generateOrderNumber(),
+          customerId: req.user!.userId,
           deliveryAddress,
           deliveryLat,
           deliveryLng,
@@ -132,27 +133,38 @@ orderRouter.post(
           deliveryFee,
           serviceCharge,
           total,
-          status:        'pending',
-          paymentMethod,
-          paymentStatus: paymentMethod === 'cash' ? 'none' : 'pending',
+          status: 'pending',
           items: {
             create: lines.map((line) => ({
-              menuItemId:        line.menuItemId,
-              menuItemName:      line.menuItemName,
-              quantity:          line.quantity,
-              unitPrice:         line.unitPrice,
-              totalPrice:        line.totalPrice,
-              notes:             line.notes,
+              menuItemId: line.menuItemId,
+              menuItemName: line.menuItemName,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              totalPrice: line.totalPrice,
+              notes: line.notes,
               selectedModifiers: line.selectedModifiers as any,
             })),
           },
         },
-        include: { items: true, customer: true },
+        include: { 
+          items: true, 
+          customer: { select: { id: true, name: true, mobile: true } } 
+        },
       });
 
-      // 9. Return order — client must now call POST /api/payments/create
-      //    with { orderId, paymentMethod } to complete checkout.
-      //    That endpoint handles SSE broadcast + WhatsApp.
+      // 9. Broadcast new order to kitchen + admin via SSE
+      sseManager.broadcastToKitchen('ORDER_CREATED', order);
+      sseManager.broadcastToAdmin('ORDER_CREATED', order);
+
+      // 10. WhatsApp: ORDER_CONFIRMED
+      if (customer.mobile) {
+        await whatsappService.send('ORDER_CONFIRMED', customer.mobile, {
+          orderNumber: order.orderNumber,
+          customerName: customer.name,
+          total,
+        });
+      }
+
       res.status(201).json({ success: true, data: order });
     } catch (err) {
       if (err instanceof AppError) {

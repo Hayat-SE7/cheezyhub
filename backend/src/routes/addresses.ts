@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────────────
 //  ADDRESSES ROUTE  — Customer only
 //  GPS + manual address CRUD
+//
+//  NOTE: Prisma model is named `Address` (singular) so
+//  the client accessor is prisma.address (NOT prisma.addresses)
 // ─────────────────────────────────────────────────────
 
 import { Router, Response } from 'express';
@@ -10,8 +13,6 @@ import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/a
 
 export const addressRouter = Router();
 
-// All address routes require a logged-in customer
-// (Admin Staff JWTs use Staff IDs — they should not use this route)
 addressRouter.use(authenticate, requireRole('customer'));
 
 // ─── Schema ──────────────────────────────────────────
@@ -32,42 +33,49 @@ const addressSchema = z.object({
 
 // ─── GET /api/addresses ───────────────────────────────
 addressRouter.get('/', async (req: AuthenticatedRequest, res: Response) => {
-  const addresses = await prisma.addresses.findMany({
+  const addresses = await prisma.address.findMany({
     where:   { userId: req.user!.userId },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   });
   res.json({ success: true, data: addresses });
 });
 
-// ─── POST /api/addresses/save-gps ────────────────────
+// ─── POST /api/addresses/gps ─────────────────────────
 // Static path MUST be before /:id dynamic routes
-addressRouter.post('/save-gps', async (req: AuthenticatedRequest, res: Response) => {
-  const { latitude, longitude, addressText } = req.body;
-  if (!latitude || !longitude || !addressText) {
+// Frontend calls: addressApi.saveGps({ latitude, longitude, addressText })
+addressRouter.post('/gps', async (req: AuthenticatedRequest, res: Response) => {
+  const schema = z.object({
+    latitude:    z.number(),
+    longitude:   z.number(),
+    addressText: z.string().min(3),
+    label:       z.string().optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
     res.status(400).json({ success: false, error: 'latitude, longitude and addressText are required' });
     return;
   }
 
+  const { latitude, longitude, addressText, label } = parsed.data;
   const userId = req.user!.userId;
 
   // Unset old defaults
-  await prisma.addresses.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
+  await prisma.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
 
-  // Create GPS address
-  const address = await prisma.addresses.create({
+  const address = await prisma.address.create({
     data: {
       userId,
-      label:       'Current Location',
+      label:       label ?? 'Current Location',
       type:        'home',
       addressText,
       latitude,
       longitude,
-      isGps:      true,
-      isDefault:  true,
+      isGps:     true,
+      isDefault: true,
     },
   });
 
-  // Update user live location fields
   await prisma.user.update({
     where: { id: userId },
     data:  {
@@ -77,6 +85,7 @@ addressRouter.post('/save-gps', async (req: AuthenticatedRequest, res: Response)
       isLocationVerified: true,
       defaultAddressId:   address.id,
     },
+    select: { id: true }, // Avoid returning tags
   });
 
   res.json({ success: true, data: address });
@@ -93,21 +102,15 @@ addressRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const data   = parsed.data;
 
-  // First-ever address is always default
-  const count = await prisma.addresses.count({ where: { userId } });
+  const count = await prisma.address.count({ where: { userId } });
   if (count === 0) data.isDefault = true;
 
-  // If marking as default, unset existing default first
   if (data.isDefault) {
-    await prisma.addresses.updateMany({
-      where: { userId, isDefault: true },
-      data:  { isDefault: false },
-    });
+    await prisma.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
   }
 
-  const address = await prisma.addresses.create({ data: { ...data, userId } });
+  const address = await prisma.address.create({ data: { ...data, userId } });
 
-  // Sync user profile fields when GPS address
   if (data.isGps && data.latitude && data.longitude) {
     await prisma.user.update({
       where: { id: userId },
@@ -118,40 +121,44 @@ addressRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
         isLocationVerified: true,
         defaultAddressId:   address.id,
       },
+      select: { id: true },
     });
   } else if (data.isDefault) {
-    await prisma.user.update({
-      where: { id: userId },
-      data:  { defaultAddressId: address.id },
+    await prisma.user.update({ 
+      where: { id: userId }, 
+      data: { defaultAddressId: address.id },
+      select: { id: true }
     });
   }
 
   res.status(201).json({ success: true, data: address });
 });
 
-// ─── PATCH /api/addresses/:id/set-default ────────────
-// Static suffix path BEFORE generic /:id
-addressRouter.patch('/:id/set-default', async (req: AuthenticatedRequest, res: Response) => {
+// ─── PATCH /api/addresses/:id/default ────────────────
+addressRouter.patch('/:id/default', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
 
-  const existing = await prisma.addresses.findFirst({ where: { id: req.params.id, userId } });
+  const existing = await prisma.address.findFirst({ where: { id: req.params.id, userId } });
   if (!existing) {
     res.status(404).json({ success: false, error: 'Address not found' });
     return;
   }
 
-  await prisma.addresses.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
-  await prisma.addresses.update({ where: { id: req.params.id }, data: { isDefault: true } });
-  await prisma.user.update({ where: { id: userId }, data: { defaultAddressId: req.params.id } });
+  await prisma.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
+  await prisma.address.update({ where: { id: req.params.id }, data: { isDefault: true } });
+  await prisma.user.update({ 
+    where: { id: userId }, 
+    data: { defaultAddressId: req.params.id },
+    select: { id: true }
+  });
 
   res.json({ success: true, message: 'Default address updated' });
 });
 
 // ─── PATCH /api/addresses/:id ────────────────────────
 addressRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.user!.userId;
-
-  const existing = await prisma.addresses.findFirst({ where: { id: req.params.id, userId } });
+  const userId   = req.user!.userId;
+  const existing = await prisma.address.findFirst({ where: { id: req.params.id, userId } });
   if (!existing) {
     res.status(404).json({ success: false, error: 'Address not found' });
     return;
@@ -164,39 +171,48 @@ addressRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response) => 
   }
 
   const data = parsed.data;
-
   if (data.isDefault) {
-    await prisma.addresses.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
-    await prisma.user.update({ where: { id: userId }, data: { defaultAddressId: req.params.id } });
+    await prisma.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
+    await prisma.user.update({ 
+      where: { id: userId }, 
+      data: { defaultAddressId: req.params.id },
+      select: { id: true }
+    });
   }
 
-  const address = await prisma.addresses.update({ where: { id: req.params.id }, data });
+  const address = await prisma.address.update({ where: { id: req.params.id }, data });
   res.json({ success: true, data: address });
 });
 
 // ─── DELETE /api/addresses/:id ────────────────────────
 addressRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.user!.userId;
-
-  const existing = await prisma.addresses.findFirst({ where: { id: req.params.id, userId } });
+  const userId   = req.user!.userId;
+  const existing = await prisma.address.findFirst({ where: { id: req.params.id, userId } });
   if (!existing) {
     res.status(404).json({ success: false, error: 'Address not found' });
     return;
   }
 
-  await prisma.addresses.delete({ where: { id: req.params.id } });
+  await prisma.address.delete({ where: { id: req.params.id } });
 
-  // Promote the next oldest address to default if the deleted one was default
   if (existing.isDefault) {
-    const next = await prisma.addresses.findFirst({
+    const next = await prisma.address.findFirst({
       where:   { userId },
       orderBy: { createdAt: 'asc' },
     });
     if (next) {
-      await prisma.addresses.update({ where: { id: next.id }, data: { isDefault: true } });
-      await prisma.user.update({ where: { id: userId }, data: { defaultAddressId: next.id } });
+      await prisma.address.update({ where: { id: next.id }, data: { isDefault: true } });
+      await prisma.user.update({ 
+        where: { id: userId }, 
+        data: { defaultAddressId: next.id },
+        select: { id: true }
+      });
     } else {
-      await prisma.user.update({ where: { id: userId }, data: { defaultAddressId: null } });
+      await prisma.user.update({ 
+        where: { id: userId }, 
+        data: { defaultAddressId: null },
+        select: { id: true }
+      });
     }
   }
 

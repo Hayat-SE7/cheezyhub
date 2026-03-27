@@ -1,267 +1,262 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { adminApi } from '@/lib/api';
-import { useSSE } from '@/hooks/useSSE';
+import { adminApi }            from '@/lib/api';
+import {
+  Search, ChevronLeft, ChevronRight, RefreshCw,
+  Package, Clock, WifiOff, Truck, ChefHat, ShoppingBag,
+  CheckCircle2, XCircle, Circle,
+} from 'lucide-react';
+import { clsx }                from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
-import { clsx } from 'clsx';
-import toast from 'react-hot-toast';
-import { Search, Truck, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
-interface Driver { id: string; username: string; }
-interface Order {
-  id: string;
-  orderNumber: string;
-  status: string;
-  total: number;
-  deliveryAddress: string;
-  createdAt: string;
-  customer: { name: string; mobile?: string };
-  driver?: { username: string };
-  items: { menuItemName: string; quantity: number }[];
-}
+// ─── Constants ──────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-  pending:   'badge-pending',
-  preparing: 'badge-preparing',
-  ready:     'badge-ready',
-  assigned:  'badge-assigned',
-  picked_up: 'badge-picked_up',
-  completed: 'badge-completed',
-  cancelled: 'badge-cancelled',
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  pending:    { label: 'Pending',    color: 'text-amber-400',  bg: 'bg-amber-500/10',   icon: <Clock size={11} /> },
+  preparing:  { label: 'Preparing', color: 'text-blue-400',   bg: 'bg-blue-500/10',    icon: <ChefHat size={11} /> },
+  ready:      { label: 'Ready',     color: 'text-emerald-400',bg: 'bg-emerald-500/10', icon: <CheckCircle2 size={11} /> },
+  assigned:   { label: 'Assigned',  color: 'text-purple-400', bg: 'bg-purple-500/10',  icon: <Truck size={11} /> },
+  picked_up:  { label: 'Picked Up', color: 'text-indigo-400', bg: 'bg-indigo-500/10',  icon: <Truck size={11} /> },
+  delivered:  { label: 'Delivered', color: 'text-teal-400',   bg: 'bg-teal-500/10',    icon: <CheckCircle2 size={11} /> },
+  completed:  { label: 'Completed', color: 'text-emerald-400',bg: 'bg-emerald-500/10', icon: <CheckCircle2 size={11} /> },
+  cancelled:  { label: 'Cancelled', color: 'text-red-400',    bg: 'bg-red-500/10',     icon: <XCircle size={11} /> },
 };
 
-const ACTIVE_STATUSES = ['pending', 'preparing', 'ready', 'assigned', 'picked_up'];
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  delivery: <Truck size={11} />,
+  counter:  <ShoppingBag size={11} />,
+  dine_in:  <Package size={11} />,
+};
+
+const STATUS_FILTERS = [
+  { key: '',          label: 'All' },
+  { key: 'pending',   label: 'Pending' },
+  { key: 'preparing', label: 'Preparing' },
+  { key: 'ready',     label: 'Ready' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'offline',   label: '📡 Offline Sync' },  // Phase 12 filter
+];
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [assignModal, setAssignModal] = useState<Order | null>(null);
-  const [selectedDriver, setSelectedDriver] = useState('');
-  const [assigning, setAssigning] = useState(false);
+  const [orders,    setOrders]    = useState<any[]>([]);
+  const [total,     setTotal]     = useState(0);
+  const [page,      setPage]      = useState(1);
+  const [totalPages,setTotalPages]= useState(1);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter]       = useState('');
 
-  const LIMIT = 20;
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const fetchOrders = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminApi.getOrders({ status: statusFilter || undefined, search: search || undefined, page, limit: LIMIT });
-      const d = res.data.data;
-      setOrders(d.items);
-      setTotal(d.total);
-      setTotalPages(d.totalPages);
+      // Phase 12: "offline" is a synthetic filter, not a real status
+      const params: Record<string, any> = {
+        page,
+        limit: 25,
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(statusFilter && statusFilter !== 'offline' && { status: statusFilter }),
+        ...(statusFilter === 'offline' && { offlineSync: true }),
+      };
+      const res = await adminApi.getOrders(params);
+      const data = res.data.data;
+      setOrders(data.items ?? []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, page]);
+  }, [page, debouncedSearch, statusFilter]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { adminApi.getDrivers().then((r) => setDrivers(r.data.data)); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  useSSE({
-    onEvent: {
-      ORDER_CREATED: () => { if (page === 1) fetchOrders(); },
-      ORDER_UPDATED: () => fetchOrders(),
-    },
-  });
-
-  const handleAssign = async () => {
-    if (!assignModal || !selectedDriver) return;
-    setAssigning(true);
-    try {
-      await adminApi.assignDriver(assignModal.id, selectedDriver);
-      toast.success(`Driver assigned to ${assignModal.orderNumber}`);
-      setAssignModal(null);
-      setSelectedDriver('');
-      fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Assignment failed');
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const handleCancel = async (order: Order) => {
-    if (!confirm(`Cancel order ${order.orderNumber}?`)) return;
-    try {
-      await adminApi.cancelOrder(order.id);
-      toast.success('Order cancelled');
-      fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Failed to cancel');
-    }
-  };
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display font-bold text-2xl text-[#f2f2f5]">Orders</h1>
-          <p className="text-[#4a4a58] text-sm mt-0.5">{total} total</p>
+          <h1 className="text-xl font-bold text-white">Orders</h1>
+          <p className="text-sm text-[#4a4a58] mt-0.5">{total.toLocaleString()} total orders</p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
-          <span className="text-[#4a4a58]">Live</span>
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111116] border border-[#1e1e28] text-xs text-[#6a6a78] hover:text-white transition-colors"
+        >
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Search + status filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4a58]" />
+          <input
+            className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-[#111116] border border-[#1e1e28] text-sm text-[#f2f2f5] placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40 transition-colors"
+            placeholder="Search order number, address, customer…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-5 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4a4a58]" />
-          <input
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40"
-            placeholder="Search order #, customer, address..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          />
-        </div>
-        <select
-          className="px-4 py-2.5 rounded-xl bg-[#111113] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40"
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All statuses</option>
-          {Object.keys(STATUS_COLORS).map((s) => (
-            <option key={s} value={s}>{s.replace('_', ' ')}</option>
-          ))}
-        </select>
+      {/* Status filter tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setStatusFilter(f.key)}
+            className={clsx(
+              'flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap',
+              statusFilter === f.key
+                ? f.key === 'offline'
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                  : 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
+                : 'bg-[#111116] border border-[#1e1e28] text-[#4a4a58] hover:text-[#f2f2f5]'
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl bg-[#0f0f11] border border-[#222228] overflow-hidden">
+      <div className="bg-[#0c0c0f] border border-[#1e1e28] rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="p-8 space-y-3">
-            {[...Array(5)].map((_, i) => <div key={i} className="skeleton h-12 rounded-xl" />)}
+          <div className="flex items-center justify-center py-16">
+            <RefreshCw size={20} className="animate-spin text-amber-500" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="py-20 text-center text-[#3a3a48]">No orders found</div>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Package size={32} className="text-[#2a2a35] mb-3" />
+            <p className="text-sm text-[#4a4a58]">No orders found</p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#1e1e22]">
-                {['Order', 'Customer', 'Items', 'Total', 'Status', 'Driver', 'Time', 'Actions'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-[#4a4a58] uppercase tracking-widest">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id} className="border-b border-[#161618] hover:bg-[#111113] transition-colors">
-                  <td className="px-4 py-3 font-mono text-[11px] text-[#6a6a78]">{order.orderNumber}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-[#d4d4dc]">{order.customer.name}</div>
-                    {order.customer.mobile && <div className="text-[11px] text-[#4a4a58]">{order.customer.mobile}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-[#9898a5]">
-                    {order.items.slice(0, 2).map((i) => `${i.quantity}× ${i.menuItemName}`).join(', ')}
-                    {order.items.length > 2 && ` +${order.items.length - 2}`}
-                  </td>
-                  <td className="px-4 py-3 font-display font-bold text-amber-400">${order.total.toFixed(2)}</td>
-                  <td className="px-4 py-3">
-                    <span className={clsx('text-[11px] px-2 py-1 rounded-lg font-bold capitalize', STATUS_COLORS[order.status])}>
-                      {order.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[#6a6a78] text-[12px]">
-                    {order.driver?.username ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-[#4a4a58] text-[11px]">
-                    {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      {order.status === 'ready' && (
-                        <button
-                          onClick={() => { setAssignModal(order); setSelectedDriver(''); }}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/25 text-[11px] font-bold hover:bg-purple-500/25 transition-colors"
-                        >
-                          <Truck size={11} /> Assign
-                        </button>
-                      )}
-                      {ACTIVE_STATUSES.includes(order.status) && (
-                        <button
-                          onClick={() => handleCancel(order)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-400 border border-red-500/25 text-[11px] font-bold hover:bg-red-500/25 transition-colors"
-                        >
-                          <X size={11} /> Cancel
-                        </button>
-                      )}
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#1e1e28]">
+                  {['Order', 'Type', 'Customer', 'Items', 'Total', 'Status', 'Time'].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[#3a3a48]">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[#0f0f14]">
+                {orders.map((order) => {
+                  const s = STATUS_CONFIG[order.status] ?? { label: order.status, color: 'text-[#4a4a58]', bg: 'bg-[#111116]', icon: <Circle size={11} /> };
+                  return (
+                    <tr key={order.id} className="hover:bg-[#111116] transition-colors group">
+
+                      {/* Order number + offline badge */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-[#f2f2f5]">
+                            {order.orderNumber}
+                          </span>
+                          {/* Phase 12: Offline Sync badge */}
+                          {order.offlineSync && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-[9px] font-bold text-indigo-300 whitespace-nowrap">
+                              <WifiOff size={8} />
+                              Offline Sync
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Type */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 text-xs text-[#6a6a78]">
+                          {TYPE_ICON[order.orderType] ?? <Package size={11} />}
+                          <span className="capitalize">{order.orderType?.replace('_', ' ')}</span>
+                        </div>
+                      </td>
+
+                      {/* Customer */}
+                      <td className="px-4 py-3">
+                        <p className="text-xs text-[#9898a5]">
+                          {order.customer?.name ?? 'Walk-in'}
+                        </p>
+                        {order.customer?.mobile && (
+                          <p className="text-[10px] text-[#3a3a48] mt-0.5">{order.customer.mobile}</p>
+                        )}
+                      </td>
+
+                      {/* Items count */}
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-[#6a6a78]">
+                          {order.items?.length ?? 0} item{order.items?.length !== 1 ? 's' : ''}
+                        </span>
+                      </td>
+
+                      {/* Total */}
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-bold text-amber-500">
+                          Rs.{order.total?.toFixed(0)}
+                        </span>
+                      </td>
+
+                      {/* Status badge */}
+                      <td className="px-4 py-3">
+                        <span className={clsx(
+                          'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold',
+                          s.color, s.bg
+                        )}>
+                          {s.icon}
+                          {s.label}
+                        </span>
+                      </td>
+
+                      {/* Time */}
+                      <td className="px-4 py-3">
+                        <span className="text-[11px] text-[#3a3a48]">
+                          {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-[#4a4a58] text-xs">{total} orders</span>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-[#3a3a48]">
+            Page {page} of {totalPages} · {total} orders
+          </span>
+          <div className="flex gap-2">
             <button
-              onClick={() => setPage(Math.max(1, page - 1))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2 rounded-lg bg-[#111113] border border-[#222228] text-[#4a4a58] disabled:opacity-30 hover:text-[#f2f2f5] transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#111116] border border-[#1e1e28] text-xs text-[#4a4a58] hover:text-white disabled:opacity-30 transition-colors"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={13} /> Prev
             </button>
-            <span className="text-[#6a6a78] text-xs font-mono">
-              {page} / {totalPages}
-            </span>
             <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="p-2 rounded-lg bg-[#111113] border border-[#222228] text-[#4a4a58] disabled:opacity-30 hover:text-[#f2f2f5] transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#111116] border border-[#1e1e28] text-xs text-[#4a4a58] hover:text-white disabled:opacity-30 transition-colors"
             >
-              <ChevronRight size={14} />
+              Next <ChevronRight size={13} />
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Assign Driver Modal */}
-      {assignModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="w-full max-w-sm bg-[#111113] rounded-3xl border border-[#222228] p-6 animate-scale-pop">
-            <h2 className="font-display font-bold text-[#f2f2f5] text-lg mb-1">Assign Driver</h2>
-            <p className="text-[#4a4a58] text-sm mb-5">Order {assignModal.orderNumber}</p>
-
-            <select
-              className="w-full px-4 py-3 rounded-xl bg-[#0f0f11] border border-[#222228] text-[#f2f2f5] text-sm outline-none focus:border-amber-500/40 mb-4"
-              value={selectedDriver}
-              onChange={(e) => setSelectedDriver(e.target.value)}
-            >
-              <option value="">Select a driver...</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>{d.username}</option>
-              ))}
-            </select>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setAssignModal(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[#222228] text-[#6a6a78] text-sm font-semibold hover:border-[#333340] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssign}
-                disabled={!selectedDriver || assigning}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-display font-bold transition-colors"
-              >
-                {assigning ? 'Assigning...' : 'Assign'}
-              </button>
-            </div>
           </div>
         </div>
       )}

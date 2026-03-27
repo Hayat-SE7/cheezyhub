@@ -8,8 +8,8 @@ import { AlertCircle, ShoppingCart, Search, Star, Flame, ChevronRight } from 'lu
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import HeroSlider from '@/components/customer/HeroSlider';
-import { DealsSection } from "@/components/customer/DealsSection";
-import { Deal } from '@prisma/client';
+import DealsSection from '@/components/customer/DealsSection';
+
 // ─── Types ───────────────────────────────────────────
 
 interface Modifier {
@@ -41,6 +41,18 @@ interface Category {
   id: string;
   name: string;
   items: MenuItem[];
+}
+
+interface Deal {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  dealType: string;
+  discountType: string;
+  discountValue: number;
+  displayLocation: string;
+  validTo?: string;
 }
 
 // ─── Menu Item Card (Visual) ────────────────────────
@@ -438,14 +450,14 @@ export default function CustomerMenuPage() {
       {/* Hero Slider */}
       {!searchQuery && sliderDeals.length > 0 && (
         <HeroSlider
-          deals={sliderDeals as any}
+          deals={sliderDeals}
           onOrderNow={() => window.scrollTo({ top: window.innerHeight * 0.9, behavior: 'smooth' })}
         />
       )}
 
       {/* Deals Section */}
       {!searchQuery && sectionDeals.length > 0 && (
-        <DealsSection deals={sectionDeals as Deal[]} />
+        <DealsSection deals={sectionDeals} />
       )}
 
       {/* Featured / Popular items */}

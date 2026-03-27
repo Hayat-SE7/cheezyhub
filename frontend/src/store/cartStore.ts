@@ -1,32 +1,34 @@
-import { create } from 'zustand';
+import { create }  from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface CartModifier {
-  id: string;
-  name: string;
+export interface CartModifier {
+  id:              string;
+  name:            string;
   priceAdjustment: number;
 }
 
-interface CartItem {
-  id: string; // unique cart line id
-  menuItemId: string;
-  name: string;
-  imageUrl?: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
+export interface CartItem {
+  id:                string;
+  menuItemId:        string;
+  name:              string;
+  imageUrl?:         string;
+  quantity:          number;
+  unitPrice:         number;
+  totalPrice:        number;
   selectedModifiers: CartModifier[];
-  notes?: string;
+  notes?:            string;
 }
 
-interface CartState {
+export interface CartState {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, 'id'>) => void;
+
+  addItem:        (item: Omit<CartItem, 'id'>) => void;
   updateQuantity: (id: string, quantity: number) => void;
-  removeItem: (id: string) => void;
-  clearCart: () => void;
-  total: () => number;
-  itemCount: () => number;
+  removeItem:     (id: string) => void;
+  clearCart:      () => void;
+  clear:          () => void;   // alias for clearCart (used by cart/page.tsx)
+  total:          () => number;
+  itemCount:      () => number;
 }
 
 export const useCartStore = create<CartState>()(
@@ -46,21 +48,16 @@ export const useCartStore = create<CartState>()(
         }
         set((s) => ({
           items: s.items.map((i) =>
-            i.id === id
-              ? { ...i, quantity, totalPrice: i.unitPrice * quantity }
-              : i
+            i.id === id ? { ...i, quantity, totalPrice: i.unitPrice * quantity } : i
           ),
         }));
       },
 
-      removeItem: (id) => {
-        set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
-      },
+      removeItem: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+      clearCart:  ()   => set({ items: [] }),
+      clear:      ()   => set({ items: [] }),
 
-      clearCart: () => set({ items: [] }),
-
-      total: () => get().items.reduce((sum, i) => sum + i.totalPrice, 0),
-
+      total:     () => get().items.reduce((sum, i) => sum + i.totalPrice, 0),
       itemCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
     { name: 'cheezyhub-cart' }

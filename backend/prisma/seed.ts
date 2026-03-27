@@ -6,102 +6,168 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding CheezyHub database...');
 
-  // ─── System Settings ─────────────────────────
+  // ─── System Settings ─────────────────────────────────────────
   const existingSettings = await prisma.systemSettings.findFirst();
   if (!existingSettings) {
     await prisma.systemSettings.create({
       data: {
-        deliveryFee: 3.99,
-        serviceCharge: 0,
+        deliveryFee:      150,
+        serviceCharge:    0,
         deliveryRadiusKm: 10,
-        restaurantName: 'CheezyHub',
-        restaurantPhone: '+1234567890',
-        ordersAccepting: true,
+        restaurantName:   'CheezyHub',
+        restaurantPhone:  '+92 300 000 0000',
+        ordersAccepting:  true,
       },
     });
+    console.log('✅ System settings created');
   }
 
-  // ─── Admin Account ────────────────────────────
-  const adminPin = await bcrypt.hash('1234', 10);
+  // ─── Staff Accounts ──────────────────────────────────────────
+
   await prisma.staff.upsert({
-    where: { username: 'admin' },
+    where:  { username: 'admin' },
     update: {},
-    create: { username: 'admin', pinHash: adminPin, role: 'admin' },
+    create: {
+      username: 'admin',
+      pinHash:  await bcrypt.hash('1234', 10),
+      role:     'admin',
+      fullName: 'Admin User',
+    },
   });
 
-  // ─── Kitchen Account ──────────────────────────
   await prisma.staff.upsert({
-    where: { username: 'kitchen1' },
+    where:  { username: 'cashier1' },
     update: {},
-    create: { username: 'kitchen1', pinHash: await bcrypt.hash('5678', 10), role: 'kitchen' },
+    create: {
+      username: 'cashier1',
+      pinHash:  await bcrypt.hash('000000', 10),
+      role:     'cashier',
+      fullName: 'Counter Staff',
+    },
   });
 
-  // ─── Delivery Driver ──────────────────────────
   await prisma.staff.upsert({
-    where: { username: 'driver1' },
+    where:  { username: 'kitchen1' },
     update: {},
-    create: { username: 'driver1', pinHash: await bcrypt.hash('9012', 10), role: 'delivery' },
+    create: {
+      username: 'kitchen1',
+      pinHash:  await bcrypt.hash('5678', 10),
+      role:     'kitchen',
+      fullName: 'Kitchen Staff',
+    },
   });
 
-  // ─── Menu Categories ─────────────────────────
+  await prisma.staff.upsert({
+    where:  { username: 'driver1' },
+    update: {
+      fullName:           'Ali Raza',
+      phone:              '+923001111111',
+      vehicleType:        'bike',
+      vehiclePlate:       'LHR-001',
+      verificationStatus: 'VERIFIED',
+      driverStatus:       'OFFLINE',
+      isActive:           true,
+    },
+    create: {
+      username:           'driver1',
+      pinHash:            await bcrypt.hash('9012', 10),
+      role:               'delivery',
+      fullName:           'Ali Raza',
+      phone:              '+923001111111',
+      vehicleType:        'bike',
+      vehiclePlate:       'LHR-001',
+      verificationStatus: 'VERIFIED',
+      driverStatus:       'OFFLINE',
+      isActive:           true,
+    },
+  });
+
+  console.log('✅ Staff accounts seeded');
+
+  // ─── Test Customer ────────────────────────────────────────────
+  await prisma.user.upsert({
+    where:  { mobile: '+923000000000' },
+    update: {},
+    create: {
+      name:    'Test Customer',
+      mobile:  '+923000000000',
+      pinHash: await bcrypt.hash('1234', 10),
+      role:    'customer',
+    },
+  });
+  console.log('✅ Test customer seeded  (mobile: +923000000000  PIN: 1234)');
+
+  // ─── Menu ─────────────────────────────────────────────────────
+  const menuCount = await prisma.menuItem.count();
+  if (menuCount > 0) {
+    console.log(`ℹ️  Menu already has ${menuCount} items — skipping menu seed`);
+  } else {
+    await seedMenu();
+    console.log('✅ Menu seeded');
+  }
+
+  console.log('\n✅ Seed complete!');
+  console.log('\n📋 Default Credentials:');
+  console.log('  Admin:    username=admin     PIN=1234');
+  console.log('  Kitchen:  username=kitchen1  PIN=5678');
+  console.log('  Cashier:  username=cashier1  PIN=000000');
+  console.log('  Driver:   username=driver1   PIN=9012');
+  console.log('  Customer: mobile=+923000000000  PIN=1234');
+}
+
+async function seedMenu() {
   const burgers = await prisma.category.upsert({
-    where: { name: 'Burgers' },
+    where:  { name: 'Burgers' },
     update: {},
     create: { name: 'Burgers', sortOrder: 1 },
   });
 
   const pizza = await prisma.category.upsert({
-    where: { name: 'Pizza' },
+    where:  { name: 'Pizza' },
     update: {},
     create: { name: 'Pizza', sortOrder: 2 },
   });
 
   const sides = await prisma.category.upsert({
-    where: { name: 'Sides' },
+    where:  { name: 'Sides' },
     update: {},
     create: { name: 'Sides', sortOrder: 3 },
   });
 
   const drinks = await prisma.category.upsert({
-    where: { name: 'Drinks' },
+    where:  { name: 'Drinks' },
     update: {},
     create: { name: 'Drinks', sortOrder: 4 },
   });
 
-  // ─── Menu Items ───────────────────────────────
-
-  // Classic Cheezeburger
+  // ─── Burgers ─────────────────────────────────────────────────
   await prisma.menuItem.create({
     data: {
-      name: 'Classic Cheezeburger',
+      name:        'Classic Cheezeburger',
       description: 'Juicy beef patty, cheddar, lettuce, tomato, pickles, special sauce',
-      basePrice: 11.99,
-      categoryId: burgers.id,
-      sortOrder: 1,
+      basePrice:   1199,
+      categoryId:  burgers.id,
+      sortOrder:   1,
       modifierGroups: {
         create: [
           {
-            name: 'Size',
-            required: true,
-            multiSelect: false,
+            name: 'Size', required: true, multiSelect: false,
             modifiers: {
               create: [
                 { name: 'Single', priceAdjustment: 0 },
-                { name: 'Double', priceAdjustment: 3.00 },
-                { name: 'Triple', priceAdjustment: 5.50 },
+                { name: 'Double', priceAdjustment: 300 },
+                { name: 'Triple', priceAdjustment: 550 },
               ],
             },
           },
           {
-            name: 'Add-ons',
-            required: false,
-            multiSelect: true,
+            name: 'Add-ons', required: false, multiSelect: true,
             modifiers: {
               create: [
-                { name: 'Extra Cheese', priceAdjustment: 1.00 },
-                { name: 'Bacon', priceAdjustment: 1.50 },
-                { name: 'Avocado', priceAdjustment: 1.50 },
-                { name: 'Jalapeños', priceAdjustment: 0.50 },
+                { name: 'Extra Cheese', priceAdjustment: 100 },
+                { name: 'Bacon',        priceAdjustment: 150 },
+                { name: 'Avocado',      priceAdjustment: 150 },
+                { name: 'Jalapeños',    priceAdjustment: 50 },
               ],
             },
           },
@@ -110,38 +176,23 @@ async function main() {
     },
   });
 
-  // Cheeze Margherita Pizza
   await prisma.menuItem.create({
     data: {
-      name: 'Margherita Pizza',
-      description: 'San Marzano tomato sauce, fresh mozzarella, basil, olive oil',
-      basePrice: 14.99,
-      categoryId: pizza.id,
-      sortOrder: 1,
+      name:        'Spicy Crispy Chicken Burger',
+      description: 'Crispy fried chicken, sriracha mayo, coleslaw, pickled jalapeños',
+      basePrice:   1299,
+      categoryId:  burgers.id,
+      sortOrder:   2,
       modifierGroups: {
         create: [
           {
-            name: 'Size',
-            required: true,
-            multiSelect: false,
+            name: 'Spice Level', required: true, multiSelect: false,
             modifiers: {
               create: [
-                { name: '10" Personal', priceAdjustment: 0 },
-                { name: '12" Medium', priceAdjustment: 3.00 },
-                { name: '14" Large', priceAdjustment: 5.00 },
-              ],
-            },
-          },
-          {
-            name: 'Extra Toppings',
-            required: false,
-            multiSelect: true,
-            modifiers: {
-              create: [
-                { name: 'Pepperoni', priceAdjustment: 2.00 },
-                { name: 'Mushrooms', priceAdjustment: 1.00 },
-                { name: 'Bell Peppers', priceAdjustment: 1.00 },
-                { name: 'Olives', priceAdjustment: 1.00 },
+                { name: 'Mild',      priceAdjustment: 0 },
+                { name: 'Medium',    priceAdjustment: 0 },
+                { name: 'Hot',       priceAdjustment: 0 },
+                { name: 'Extra Hot', priceAdjustment: 0 },
               ],
             },
           },
@@ -150,49 +201,91 @@ async function main() {
     },
   });
 
-  // Loaded Fries
   await prisma.menuItem.create({
     data: {
-      name: 'Loaded Cheeze Fries',
-      description: 'Crispy fries smothered in cheese sauce, topped with sour cream',
-      basePrice: 7.99,
-      categoryId: sides.id,
-      sortOrder: 1,
+      name:       'BBQ Smash Burger',
+      description:'Double smash patty, smoky BBQ sauce, crispy onions, American cheese',
+      basePrice:  1399, categoryId: burgers.id, sortOrder: 3,
     },
   });
 
-  // Onion Rings
   await prisma.menuItem.create({
     data: {
-      name: 'Crispy Onion Rings',
-      description: 'Beer-battered onion rings served with dipping sauce',
-      basePrice: 5.99,
-      categoryId: sides.id,
-      sortOrder: 2,
+      name:       'Mushroom Swiss Burger',
+      description:'Beef patty, sautéed mushrooms, Swiss cheese, garlic aioli',
+      basePrice:  1249, categoryId: burgers.id, sortOrder: 4,
     },
   });
 
-  // Drinks
-  for (const drink of [
-    { name: 'Fresh Lemonade', price: 3.99 },
-    { name: 'Iced Coffee', price: 4.49 },
-    { name: 'Soft Drink', price: 2.49 },
-    { name: 'Milkshake', price: 5.99 },
-  ]) {
-    await prisma.menuItem.create({
-      data: {
-        name: drink.name,
-        basePrice: drink.price,
-        categoryId: drinks.id,
+  // ─── Pizza ───────────────────────────────────────────────────
+  await prisma.menuItem.create({
+    data: {
+      name:        'Margherita Pizza',
+      description: 'San Marzano tomato sauce, fresh mozzarella, basil, olive oil',
+      basePrice:   1499,
+      categoryId:  pizza.id,
+      sortOrder:   1,
+      modifierGroups: {
+        create: [
+          {
+            name: 'Size', required: true, multiSelect: false,
+            modifiers: {
+              create: [
+                { name: '10" Personal', priceAdjustment: 0 },
+                { name: '12" Medium',   priceAdjustment: 300 },
+                { name: '14" Large',    priceAdjustment: 500 },
+              ],
+            },
+          },
+        ],
       },
+    },
+  });
+
+  await prisma.menuItem.create({
+    data: {
+      name: 'Pepperoni Overload Pizza', description: 'Triple-layer pepperoni, mozzarella blend',
+      basePrice: 1699, categoryId: pizza.id, sortOrder: 2,
+    },
+  });
+
+  await prisma.menuItem.create({
+    data: {
+      name: 'BBQ Chicken Pizza', description: 'Grilled chicken, smoky BBQ sauce, red onions, coriander',
+      basePrice: 1599, categoryId: pizza.id, sortOrder: 3,
+    },
+  });
+
+  // ─── Sides ───────────────────────────────────────────────────
+  const sideItems = [
+    { name: 'Loaded Cheeze Fries',  price: 799,  desc: 'Crispy fries smothered in cheese sauce' },
+    { name: 'Crispy Onion Rings',   price: 599,  desc: 'Beer-battered onion rings' },
+    { name: 'Chicken Nuggets (6pc)',price: 699,  desc: 'Golden crispy nuggets' },
+    { name: 'Coleslaw',             price: 349,  desc: 'Creamy homemade coleslaw' },
+    { name: 'Garlic Bread',         price: 399,  desc: 'Toasted sourdough with garlic butter' },
+  ];
+  for (let i = 0; i < sideItems.length; i++) {
+    const s = sideItems[i];
+    await prisma.menuItem.create({
+      data: { name: s.name, description: s.desc, basePrice: s.price, categoryId: sides.id, sortOrder: i + 1 },
     });
   }
 
-  console.log('✅ Seed complete!');
-  console.log('\n📋 Default Credentials:');
-  console.log('  Admin:   username=admin    PIN=1234');
-  console.log('  Kitchen: username=kitchen1 PIN=5678');
-  console.log('  Driver:  username=driver1  PIN=9012');
+  // ─── Drinks ──────────────────────────────────────────────────
+  const drinkItems = [
+    { name: 'Fresh Lemonade', price: 399, desc: 'Freshly squeezed with a hint of mint' },
+    { name: 'Iced Coffee',    price: 449, desc: 'Cold brew over ice' },
+    { name: 'Soft Drink',     price: 249, desc: 'Pepsi, 7Up, or Mirinda' },
+    { name: 'Milkshake',      price: 599, desc: 'Thick and creamy — chocolate, vanilla, or strawberry' },
+    { name: 'Mineral Water',  price: 149, desc: 'Still or sparkling' },
+    { name: 'Mango Lassi',    price: 429, desc: 'Chilled yogurt-based mango drink' },
+  ];
+  for (let i = 0; i < drinkItems.length; i++) {
+    const d = drinkItems[i];
+    await prisma.menuItem.create({
+      data: { name: d.name, description: d.desc, basePrice: d.price, categoryId: drinks.id, sortOrder: i + 1 },
+    });
+  }
 }
 
 main()

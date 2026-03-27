@@ -76,9 +76,9 @@ export async function generateAndStoreOtp(mobile: string): Promise<string> {
   await prisma.user.upsert({
     where:  { mobile },
     create: {
-      name:          '',         // filled in at completeRegistration
+      name:          '',
       mobile,
-      pinHash:       '',         // filled in at completeRegistration
+      pinHash:       '',
       role:          'customer',
       isVerified:    false,
       otpHash,
@@ -89,9 +89,10 @@ export async function generateAndStoreOtp(mobile: string): Promise<string> {
     update: {
       otpHash,
       otpExpiresAt,
-      otpAttempts:   0,          // reset on new OTP
+      otpAttempts:   0,
       otpLastSentAt: new Date(),
     },
+    select: { id: true },
   });
 
   return otp;
@@ -137,6 +138,7 @@ export async function verifyOtp(mobile: string, submittedOtp: string): Promise<v
     await prisma.user.update({
       where: { id: user.id },
       data:  { otpAttempts: newAttempts },
+      select: { id: true },
     });
 
     throw new AppError(
@@ -156,6 +158,7 @@ export async function verifyOtp(mobile: string, submittedOtp: string): Promise<v
       otpExpiresAt: null,
       otpAttempts:  0,
     },
+    select: { id: true },
   });
 }
 
@@ -187,6 +190,7 @@ export async function completeRegistration(
   await prisma.user.update({
     where: { id: user.id },
     data:  { name: name.trim(), pinHash },
+    select: { id: true },
   });
 }
 
@@ -294,5 +298,6 @@ export async function verifyOtpViaTwilio(mobile: string, code: string): Promise<
       otpExpiresAt: null,
       otpAttempts:  0,
     },
+    select: { id: true },
   });
 }

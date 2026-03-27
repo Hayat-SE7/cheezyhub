@@ -1,35 +1,58 @@
 'use client';
-import { Deal } from '@prisma/client';
+
+// ─────────────────────────────────────────────────────────────────
+//  DealsSection.tsx  — customer homepage deals carousel
+//  DO NOT import from '@prisma/client' in frontend components.
+//  Uses a local Deal interface that matches the API response shape.
+// ─────────────────────────────────────────────────────────────────
+
 import { motion } from 'framer-motion';
 import { Tag, Clock, Star, Zap, Gift, Package } from 'lucide-react';
 
-const DEAL_ICONS = {
-  combo:       Package,
-  discount:    Tag,
-  promotion:   Zap,
-  featured:    Star,
+// ── Local Deal interface (mirrors Prisma model fields used here) ──
+export interface Deal {
+  id:              string;
+  title:           string;
+  description?:    string | null;
+  imageUrl?:       string | null;
+  dealType:        string;   // string — API may return any value
+  discountType:    string;
+  discountValue:   number;
+  displayLocation?: string;
+  validTo?:        string | Date | null;
+}
+
+type KnownDealType = 'combo' | 'discount' | 'promotion' | 'featured';
+
+const DEAL_ICONS: Record<KnownDealType, React.ElementType> = {
+  combo:     Package,
+  discount:  Tag,
+  promotion: Zap,
+  featured:  Star,
 };
 
-const DEAL_COLORS = {
-  combo:       { bg: '#eff6ff', accent: '#3b82f6', text: '#1d4ed8', border: '#bfdbfe' },
-  discount:    { bg: '#fef2f2', accent: '#ef4444', text: '#dc2626', border: '#fecaca' },
-  promotion:   { bg: '#faf5ff', accent: '#8b5cf6', text: '#7c3aed', border: '#ddd6fe' },
-  featured:    { bg: '#fffbeb', accent: '#f59e0b', text: '#d97706', border: '#fde68a' },
+const DEAL_COLORS: Record<KnownDealType, { bg: string; accent: string; text: string; border: string }> = {
+  combo:     { bg: '#eff6ff', accent: '#3b82f6', text: '#1d4ed8', border: '#bfdbfe' },
+  discount:  { bg: '#fef2f2', accent: '#ef4444', text: '#dc2626', border: '#fecaca' },
+  promotion: { bg: '#faf5ff', accent: '#8b5cf6', text: '#7c3aed', border: '#ddd6fe' },
+  featured:  { bg: '#fffbeb', accent: '#f59e0b', text: '#d97706', border: '#fde68a' },
 };
 
 const EMOJI_BG: Record<string, string> = {
-  combo: '🍔+🍟+🥤',
-  discount: '🔥',
+  combo:     '🍔+🍟+🥤',
+  discount:  '🔥',
   promotion: '✨',
-  featured: '⭐',
+  featured:  '⭐',
 };
+
+const FALLBACK_COLOR = DEAL_COLORS.featured;
 
 interface DealsSectionProps {
   deals: Deal[];
 }
 
-export const DealsSection = ({ deals }: DealsSectionProps) => {
-  if (deals.length === 0) return null;
+export default function DealsSection({ deals }: DealsSectionProps) {
+  if (!deals || deals.length === 0) return null;
 
   return (
     <div className="mb-6">
@@ -44,20 +67,25 @@ export const DealsSection = ({ deals }: DealsSectionProps) => {
       </div>
 
       {/* Horizontal scroll container */}
-      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scroll-smooth"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div
+        className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scroll-smooth"
+        style={{ scrollbarWidth: 'none' } as React.CSSProperties}
+      >
         {deals.map((deal, i) => {
-          const colors = DEAL_COLORS[deal.dealType] ?? DEAL_COLORS.featured;
-          const Icon = DEAL_ICONS[deal.dealType] ?? Tag;
+          const type   = deal.dealType as KnownDealType;
+          const colors = DEAL_COLORS[type] ?? FALLBACK_COLOR;
+          const Icon   = DEAL_ICONS[type]  ?? Tag;
+
           const discountLabel =
             deal.discountValue > 0
               ? deal.discountType === 'percent'
                 ? `${deal.discountValue}% OFF`
-                : `Save $${deal.discountValue.toFixed(2)}`
+                : `Save Rs. ${deal.discountValue.toFixed(0)}`
               : null;
 
-          const timeLeft = deal.validTo
-            ? Math.ceil((new Date(deal.validTo).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          const validToDate = deal.validTo ? new Date(deal.validTo) : null;
+          const timeLeft = validToDate
+            ? Math.ceil((validToDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
             : null;
 
           return (
@@ -81,7 +109,7 @@ export const DealsSection = ({ deals }: DealsSectionProps) => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-4xl select-none">{EMOJI_BG[deal.dealType]}</span>
+                  <span className="text-4xl select-none">{EMOJI_BG[deal.dealType] ?? '🍽'}</span>
                 )}
 
                 {/* Discount badge */}
@@ -99,7 +127,10 @@ export const DealsSection = ({ deals }: DealsSectionProps) => {
               <div className="p-3">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Icon size={11} style={{ color: colors.accent }} />
-                  <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: colors.text }}>
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: colors.text }}
+                  >
                     {deal.dealType}
                   </span>
                 </div>
@@ -113,7 +144,7 @@ export const DealsSection = ({ deals }: DealsSectionProps) => {
                 {timeLeft !== null && timeLeft <= 3 && (
                   <div className="flex items-center gap-1 mt-2 text-[10px] text-red-500 font-semibold">
                     <Clock size={9} />
-                    {timeLeft === 0 ? 'Ends today!' : `${timeLeft}d left`}
+                    {timeLeft <= 0 ? 'Ends today!' : `${timeLeft}d left`}
                   </div>
                 )}
               </div>

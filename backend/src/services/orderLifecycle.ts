@@ -93,7 +93,11 @@ export async function applyStatusChange(
   // 1. Load order
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { customer: true, driver: true, items: true },
+    include: { 
+      customer: { select: { id: true, name: true, mobile: true } }, 
+      driver: { select: { id: true, username: true } }, 
+      items: true 
+    },
   });
 
   if (!order) throw new AppError('Order not found', 404);
@@ -109,7 +113,11 @@ export async function applyStatusChange(
   const updated = await prisma.order.update({
     where: { id: orderId },
     data: updateData,
-    include: { customer: true, driver: true, items: true },
+    include: { 
+      customer: { select: { id: true, name: true, mobile: true } }, 
+      driver: { select: { id: true, username: true } }, 
+      items: true 
+    },
   });
 
   // 5. Fire SSE events

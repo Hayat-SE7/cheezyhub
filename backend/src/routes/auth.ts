@@ -1,249 +1,26 @@
-// ─────────────────────────────────────────────────────
-//  AUTH ROUTE  v6.1
-//
-//  Customer registration — 3-step OTP flow:
-//    1. POST /api/auth/send-otp             → sends OTP to phone
-//    2. POST /api/auth/verify-otp           → verifies code, returns verificationToken
-//    3. POST /api/auth/complete-registration→ sets name + PIN, returns JWT
-//
-//  Customer login (after registration):
-//    POST /api/auth/login  (role: "customer") → mobile/email + PIN
-//
-//  Staff login (unchanged):
-//    POST /api/auth/login  (role: "staff")    → username + PIN
-// ─────────────────────────────────────────────────────
-
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../config/db';
 import { AppError } from '../middleware/errorHandler';
-import {
-  generateAndStoreOtp,
-  sendOtpViaSms,
-  verifyOtp,
-  verifyOtpViaTwilio,
-  completeRegistration,
-} from '../services/otpService';
+import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { generateAndStoreOtp, verifyOtp, sendOtpViaSms } from '../services/otpService';
 
 export const authRouter = Router();
 
-const ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10');
-const IS_DEV = process.env.NODE_ENV !== 'production';
+const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10');
 
-function issueJwt(userId: string, role: string, expiresIn = '7d'): string {
-  return jwt.sign({ userId, role }, process.env.JWT_SECRET!, { expiresIn } as any);
-}
-
-// ─────────────────────────────────────────────────────
-//  POST /api/auth/send-otp
-//  Step 1: customer enters phone number → we send OTP.
-//  In dev mode, OTP is returned in the response body (_devOtp).
-// ─────────────────────────────────────────────────────
-
-authRouter.post('/send-otp', async (req: Request, res: Response) => {
-  const schema = z.object({
-    mobile: z
-      .string()
-      .min(7, 'Invalid phone number')
-      .max(15, 'Invalid phone number')
-      .regex(/^\+?[0-9]+$/, 'Phone must contain digits only'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
-    return;
-  }
-
-  const mobile = parsed.data.mobile.startsWith('+')
-    ? parsed.data.mobile
-    : `+${parsed.data.mobile}`;
-
-  // Block if a completed account already exists for this number
-  const existing = await prisma.user.findFirst({
-    where:  { mobile, isVerified: true, NOT: { pinHash: '' } },
-    select: { id: true },
-  });
-  if (existing) {
-    res.status(409).json({
-      success: false,
-      error:   'An account with this number already exists. Please sign in instead.',
-    });
-    return;
-  }
-
-  try {
-    const otp = await generateAndStoreOtp(mobile);
-    await sendOtpViaSms(mobile, otp);
-
-    const data: Record<string, any> = {
-      success: true,
-      message: 'OTP sent! Check your messages.',
-    };
-
-    // DEV ONLY — never do this in production
-    if (IS_DEV) {
-      data._devOtp  = otp;
-      data._devNote = 'OTP included only in development mode.';
-    }
-
-    res.json(data);
-  } catch (err) {
-    if (err instanceof AppError) {
-      res.status(err.statusCode).json({ success: false, error: err.message });
-    } else {
-      console.error('[Auth/send-otp]', err);
-      res.status(500).json({ success: false, error: 'Failed to send OTP. Try again.' });
-    }
-  }
+// ─── POST /api/auth/login ─────────────────────────────────────────
+// Handles both customers (role:'customer') and staff (role:'staff')
+const loginSchema = z.object({
+  identifier: z.string().min(1),
+  pin:        z.string().min(4).max(8),
+  role:       z.enum(['customer', 'staff']).default('customer'),
 });
-
-// ─────────────────────────────────────────────────────
-//  POST /api/auth/verify-otp
-//  Step 2: customer submits 6-digit code.
-//  On success: returns a short-lived verificationToken (5 min)
-//  that proves the phone was verified — required for step 3.
-// ─────────────────────────────────────────────────────
-
-authRouter.post('/verify-otp', async (req: Request, res: Response) => {
-  const schema = z.object({
-    mobile: z.string().min(7).max(15),
-    otp:    z.string().length(6, 'OTP is 6 digits').regex(/^\d{6}$/, 'OTP must be numeric'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
-    return;
-  }
-
-  const mobile = parsed.data.mobile.startsWith('+')
-    ? parsed.data.mobile
-    : `+${parsed.data.mobile}`;
-
-  try {
-    // Use Twilio Verify's own check if that provider is active
-    if (process.env.OTP_PROVIDER === 'twilio_verify') {
-      await verifyOtpViaTwilio(mobile, parsed.data.otp);
-    } else {
-      await verifyOtp(mobile, parsed.data.otp);
-    }
-
-    // Short-lived proof token — expires in 5 minutes
-    const verificationToken = jwt.sign(
-      { mobile, purpose: 'registration' },
-      process.env.JWT_SECRET!,
-      { expiresIn: '5m' } as any
-    );
-
-    res.json({
-      success: true,
-      message: 'Phone verified! Set your name and PIN.',
-      data:    { verificationToken },
-    });
-  } catch (err) {
-    if (err instanceof AppError) {
-      res.status(err.statusCode).json({ success: false, error: err.message });
-    } else {
-      res.status(500).json({ success: false, error: 'Verification failed. Try again.' });
-    }
-  }
-});
-
-// ─────────────────────────────────────────────────────
-//  POST /api/auth/complete-registration
-//  Step 3: customer sets name and PIN.
-//  Requires the verificationToken from step 2.
-//  Returns a full JWT — customer is now logged in.
-// ─────────────────────────────────────────────────────
-
-authRouter.post('/complete-registration', async (req: Request, res: Response) => {
-  const schema = z.object({
-    verificationToken: z.string().min(1, 'Verification token required'),
-    name: z
-      .string()
-      .min(2, 'Name must be at least 2 characters')
-      .max(80, 'Name too long')
-      .regex(/^[^\d]/, 'Name cannot start with a number'),
-    pin: z
-      .string()
-      .min(4, 'PIN must be at least 4 digits')
-      .max(8, 'PIN max 8 digits')
-      .regex(/^\d+$/, 'PIN must be numeric'),
-  });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ success: false, error: parsed.error.errors[0]?.message });
-    return;
-  }
-
-  const { verificationToken, name, pin } = parsed.data;
-
-  // Validate the short-lived verification token
-  let decoded: { mobile: string; purpose: string };
-  try {
-    decoded = jwt.verify(verificationToken, process.env.JWT_SECRET!) as {
-      mobile: string;
-      purpose: string;
-    };
-  } catch {
-    res.status(400).json({
-      success: false,
-      error:   'Verification session expired. Please verify your phone again.',
-    });
-    return;
-  }
-
-  if (decoded.purpose !== 'registration') {
-    res.status(400).json({ success: false, error: 'Invalid token.' });
-    return;
-  }
-
-  try {
-    const pinHash = await bcrypt.hash(pin, ROUNDS);
-    await completeRegistration(decoded.mobile, name, pinHash);
-
-    const user = await prisma.user.findFirst({
-      where:  { mobile: decoded.mobile, isVerified: true },
-      select: { id: true, name: true, mobile: true, email: true, role: true },
-    });
-
-    if (!user) {
-      res.status(500).json({ success: false, error: 'Registration error. Try again.' });
-      return;
-    }
-
-    res.status(201).json({
-      success: true,
-      data:    { token: issueJwt(user.id, user.role), user },
-    });
-  } catch (err) {
-    if (err instanceof AppError) {
-      res.status(err.statusCode).json({ success: false, error: err.message });
-    } else {
-      console.error('[Auth/complete-registration]', err);
-      res.status(409).json({ success: false, error: 'Registration failed. Try again.' });
-    }
-  }
-});
-
-// ─────────────────────────────────────────────────────
-//  POST /api/auth/login
-//  Customer: mobile/email + PIN. Must be verified + have a PIN set.
-//  Staff:    username + PIN (kitchen/delivery/admin).
-// ─────────────────────────────────────────────────────
 
 authRouter.post('/login', async (req: Request, res: Response) => {
-  const schema = z.object({
-    identifier: z.string().min(1),
-    pin:        z.string().min(4).max(8),
-    role:       z.enum(['customer', 'staff']).default('customer'),
-  });
-
-  const parsed = schema.safeParse(req.body);
+  const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, error: 'Invalid input' });
     return;
@@ -254,28 +31,32 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   try {
     if (role === 'customer') {
       const user = await prisma.user.findFirst({
-        where: {
-          OR:          [{ mobile: identifier }, { email: identifier }],
-          role:        'customer',
-          isVerified:  true,
-          NOT:         { pinHash: '' },
-        },
+        where: { OR: [{ mobile: identifier }, { email: identifier }], role: 'customer' },
+        select: { id: true, name: true, mobile: true, email: true, pinHash: true, role: true, isBlocked: true },
       });
 
       if (!user || !(await bcrypt.compare(pin, user.pinHash))) {
         throw new AppError('Invalid credentials', 401);
       }
+      if (user.isBlocked) {
+        throw new AppError('Account suspended. Please contact support.', 403);
+      }
+
+      const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET!,
+        { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
+      );
 
       res.json({
         success: true,
         data: {
-          token: issueJwt(user.id, user.role),
-          user:  { id: user.id, name: user.name, mobile: user.mobile, email: user.email, role: user.role },
-          role:  user.role,
+          token,
+          user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email, role: user.role },
         },
       });
-
     } else {
+      // Staff: kitchen | delivery | admin | cashier
       const staff = await prisma.staff.findFirst({
         where: { username: identifier, isActive: true },
       });
@@ -284,12 +65,19 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         throw new AppError('Invalid credentials', 401);
       }
 
+      await prisma.staff.update({ where: { id: staff.id }, data: { lastLoginAt: new Date() } });
+
+      const token = jwt.sign(
+        { userId: staff.id, role: staff.role },
+        process.env.JWT_SECRET!,
+        { expiresIn: '24h' }
+      );
+
       res.json({
         success: true,
         data: {
-          token: issueJwt(staff.id, staff.role, '24h'),
-          user:  { id: staff.id, username: staff.username, role: staff.role },
-          role:  staff.role,
+          token,
+          user: { id: staff.id, username: staff.username, role: staff.role, fullName: staff.fullName },
         },
       });
     }
@@ -299,5 +87,275 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     } else {
       res.status(500).json({ success: false, error: 'Login failed' });
     }
+  }
+});
+
+// ─── POST /api/auth/register ──────────────────────────────────────
+authRouter.post('/register', async (req: Request, res: Response) => {
+  const schema = z.object({
+    name:   z.string().min(2),
+    mobile: z.string().optional(),
+    email:  z.string().email().optional(),
+    pin:    z.string().min(4).max(8),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Invalid input' });
+    return;
+  }
+
+  const { name, mobile, email, pin } = parsed.data;
+  if (!mobile && !email) {
+    res.status(400).json({ success: false, error: 'Mobile or email required' });
+    return;
+  }
+
+  try {
+    const pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
+    const user    = await prisma.user.create({
+      data: { name, mobile, email, pinHash, role: 'customer' },
+      select: { id: true, name: true, mobile: true, email: true, role: true },
+    });
+
+    const token = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        token,
+        user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email, role: user.role },
+      },
+    });
+  } catch {
+    res.status(409).json({ success: false, error: 'Mobile or email already in use' });
+  }
+});
+
+// ─── POST /api/auth/send-otp ──────────────────────────────────────
+// Uses otpService: HMAC-hashed storage, crypto.randomInt, rate limiting
+authRouter.post('/send-otp', async (req: Request, res: Response) => {
+  const schema = z.object({ mobile: z.string().min(6) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Mobile number required' });
+    return;
+  }
+
+  const { mobile } = parsed.data;
+
+  try {
+    // generateAndStoreOtp: creates/upserts user, stores HMAC hash, enforces cooldown
+    const otp = await generateAndStoreOtp(mobile);
+
+    // Send OTP via configured provider (stub logs to console in dev)
+    await sendOtpViaSms(mobile, otp);
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.json({
+      success: true,
+      message: 'OTP sent',
+      ...(isProduction ? {} : { _devOtp: otp }),
+    });
+  } catch (err) {
+    if (err instanceof AppError) {
+      res.status(err.statusCode).json({ success: false, error: err.message });
+    } else {
+      res.status(500).json({ success: false, error: 'Failed to send OTP' });
+    }
+  }
+});
+
+// ─── POST /api/auth/verify-otp ───────────────────────────────────
+// Uses otpService: HMAC comparison, timing-safe, attempt limiting
+authRouter.post('/verify-otp', async (req: Request, res: Response) => {
+  const schema = z.object({
+    mobile: z.string(),
+    otp:    z.string().length(6),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Mobile and 6-digit OTP required' });
+    return;
+  }
+
+  const { mobile, otp } = parsed.data;
+
+  try {
+    // verifyOtp: HMAC comparison, timing-safe, increments attempts, clears on success
+    await verifyOtp(mobile, otp);
+
+    // Find the now-verified user to create the verification token
+    const user = await prisma.user.findFirst({ 
+      where: { mobile },
+      select: { id: true }
+    });
+    if (!user) {
+      res.status(400).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    // Return a short-lived token so the client can call /complete-registration
+    const verificationToken = jwt.sign(
+      { userId: user.id, step: 'otp_verified' },
+      process.env.JWT_SECRET!,
+      { expiresIn: '15m' }
+    );
+
+    res.json({ success: true, data: { verificationToken } });
+  } catch (err) {
+    if (err instanceof AppError) {
+      res.status(err.statusCode).json({ success: false, error: err.message });
+    } else {
+      res.status(500).json({ success: false, error: 'OTP verification failed' });
+    }
+  }
+});
+
+// ─── POST /api/auth/complete-registration ────────────────────────
+authRouter.post('/complete-registration', async (req: Request, res: Response) => {
+  const schema = z.object({
+    verificationToken: z.string(),
+    name:              z.string().min(2),
+    pin:               z.string().min(4).max(8),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Invalid input' });
+    return;
+  }
+
+  const { verificationToken, name, pin } = parsed.data;
+
+  let payload: { userId: string; step: string };
+  try {
+    payload = jwt.verify(verificationToken, process.env.JWT_SECRET!) as any;
+  } catch {
+    res.status(400).json({ success: false, error: 'Verification token expired. Please verify your phone again.' });
+    return;
+  }
+
+  if (payload.step !== 'otp_verified') {
+    res.status(400).json({ success: false, error: 'Invalid verification token' });
+    return;
+  }
+
+  const pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
+  const user    = await prisma.user.update({
+    where: { id: payload.userId },
+    data:  { name, pinHash, isVerified: true },
+    select: { id: true, name: true, mobile: true, role: true },
+  });
+
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    process.env.JWT_SECRET!,
+    { expiresIn: '7d' }
+  );
+
+  res.json({
+    success: true,
+    data: {
+      token,
+      user: { id: user.id, name: user.name, mobile: user.mobile, role: user.role },
+    },
+  });
+});
+
+// ─── POST /api/auth/login-pin ─────────────────────────────────────
+// Direct mobile + pin login (alternative to OTP flow)
+authRouter.post('/login-pin', async (req: Request, res: Response) => {
+  const schema = z.object({
+    mobile: z.string(),
+    pin:    z.string().min(4).max(8),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Invalid input' });
+    return;
+  }
+
+  const { mobile, pin } = parsed.data;
+  const user = await prisma.user.findFirst({ 
+    where: { mobile, role: 'customer' },
+    select: { id: true, pinHash: true, isBlocked: true, name: true, mobile: true, role: true }
+  });
+
+  if (!user || !user.pinHash || !(await bcrypt.compare(pin, user.pinHash))) {
+    res.status(401).json({ success: false, error: 'Invalid mobile or PIN' });
+    return;
+  }
+  if (user.isBlocked) {
+    res.status(403).json({ success: false, error: 'Account suspended' });
+    return;
+  }
+
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    process.env.JWT_SECRET!,
+    { expiresIn: '7d' }
+  );
+
+  res.json({
+    success: true,
+    data: {
+      token,
+      user: { id: user.id, name: user.name, mobile: user.mobile, role: user.role },
+    },
+  });
+});
+
+// ─── POST /api/auth/reset-pin ─────────────────────────────────────
+authRouter.post('/reset-pin', async (req: Request, res: Response) => {
+  const schema = z.object({
+    identifier: z.string(),
+    newPin:     z.string().min(4).max(8),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Invalid input' });
+    return;
+  }
+
+  const { identifier, newPin } = parsed.data;
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ mobile: identifier }, { email: identifier }] },
+    select: { id: true }
+  });
+
+  if (!user) {
+    res.status(404).json({ success: false, error: 'Account not found' });
+    return;
+  }
+
+  const pinHash = await bcrypt.hash(newPin, BCRYPT_ROUNDS);
+  await prisma.user.update({ 
+    where: { id: user.id }, 
+    data: { pinHash },
+    select: { id: true }
+  });
+  res.json({ success: true, message: 'PIN updated' });
+});
+
+// ─── GET /api/auth/me ────────────────────────────────────────────
+authRouter.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const { userId, role } = req.user!;
+
+  if (role === 'customer') {
+    const user = await prisma.user.findUnique({
+      where:  { id: userId },
+      select: { id: true, name: true, mobile: true, email: true, role: true, defaultAddressId: true },
+    });
+    res.json({ success: true, data: user });
+  } else {
+    const staff = await prisma.staff.findUnique({
+      where:  { id: userId },
+      select: { id: true, username: true, role: true, fullName: true },
+    });
+    res.json({ success: true, data: staff });
   }
 });

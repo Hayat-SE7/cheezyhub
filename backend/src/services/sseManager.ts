@@ -1,16 +1,17 @@
 import { Response } from 'express';
 
 // ─────────────────────────────────────────────
-//  SSE Manager
+//  SSE Manager  (Phase 12 — complete)
 //  Manages Server-Sent Event connections for
-//  kitchen, delivery, and customer clients.
+//  all panels: customer, kitchen, delivery,
+//  counter (cashier/admin).
 // ─────────────────────────────────────────────
 
 interface SSEClient {
-  id: string;
-  role: string;
+  id:     string;
+  role:   string;
   userId: string;
-  res: Response;
+  res:    Response;
 }
 
 class SSEManager {
@@ -23,11 +24,7 @@ class SSEManager {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    // Keep-alive ping every 30s
-    const heartbeat = setInterval(() => {
-      res.write(': ping\n\n');
-    }, 30000);
-
+    const heartbeat = setInterval(() => { res.write(': ping\n\n'); }, 30000);
     const client: SSEClient = { id, role, userId, res };
     this.clients.set(id, client);
 
@@ -36,7 +33,6 @@ class SSEManager {
       this.clients.delete(id);
     });
 
-    // Send connection confirmation
     this.sendToClient(id, 'connected', { clientId: id });
   }
 
@@ -46,7 +42,7 @@ class SSEManager {
     client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 
-  // Broadcast to all kitchen connections
+  // ── Kitchen ───────────────────────────────────────────────────
   broadcastToKitchen(event: string, data: unknown): void {
     this.clients.forEach((client) => {
       if (client.role === 'kitchen') {
@@ -55,7 +51,7 @@ class SSEManager {
     });
   }
 
-  // Broadcast to all delivery drivers
+  // ── Delivery (broadcast to all drivers) ───────────────────────
   broadcastToDelivery(event: string, data: unknown): void {
     this.clients.forEach((client) => {
       if (client.role === 'delivery') {
@@ -64,7 +60,16 @@ class SSEManager {
     });
   }
 
-  // Send to a specific customer
+  // ── Send to a specific driver by their staff userId ───────────
+  sendToDriver(driverId: string, event: string, data: unknown): void {
+    this.clients.forEach((client) => {
+      if (client.role === 'delivery' && client.userId === driverId) {
+        client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+    });
+  }
+
+  // ── Customer (send to one specific customer) ──────────────────
   sendToCustomer(customerId: string, event: string, data: unknown): void {
     this.clients.forEach((client) => {
       if (client.role === 'customer' && client.userId === customerId) {
@@ -73,7 +78,7 @@ class SSEManager {
     });
   }
 
-  // Broadcast to all admin connections
+  // ── Admin ─────────────────────────────────────────────────────
   broadcastToAdmin(event: string, data: unknown): void {
     this.clients.forEach((client) => {
       if (client.role === 'admin') {
@@ -82,16 +87,24 @@ class SSEManager {
     });
   }
 
-  // Broadcast to everyone
+  // ── Counter (cashier + admin role clients) ────────────────────
+  // Phase 12: used for menu_cache_invalidate broadcasts
+  broadcastToCounter(event: string, data: unknown): void {
+    this.clients.forEach((client) => {
+      if (client.role === 'cashier' || client.role === 'admin') {
+        client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+    });
+  }
+
+  // ── Everyone ──────────────────────────────────────────────────
   broadcastAll(event: string, data: unknown): void {
     this.clients.forEach((client) => {
       client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     });
   }
 
-  getClientCount(): number {
-    return this.clients.size;
-  }
+  getClientCount(): number { return this.clients.size; }
 }
 
 // Singleton

@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { orderApi } from '@/lib/api';
 import { useSSE } from '@/hooks/useSSE';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
-import { RotateCcw, ShoppingBag, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { RotateCcw, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface OrderItem {
   id: string;
-  menuItemId: string;
   menuItemName: string;
   quantity: number;
   unitPrice: number;
@@ -25,8 +24,6 @@ interface Order {
   id: string;
   orderNumber: string;
   status: string;
-  paymentMethod: string;
-  paymentStatus: string;
   total: number;
   subtotal: number;
   deliveryFee: number;
@@ -36,6 +33,7 @@ interface Order {
   items: OrderItem[];
 }
 
+// Progress steps for the order tracking bar
 const STATUS_STEPS = ['pending', 'preparing', 'ready', 'assigned', 'picked_up', 'completed'];
 const STATUS_LABELS: Record<string, string> = {
   pending:   '📋 Order Placed',
@@ -103,26 +101,9 @@ function OrderProgressBar({ status }: { status: string }) {
   );
 }
 
-// ─── Payment awaiting banner ──────────────────────────
-function AwaitingPaymentBanner({ orderNumber }: { orderNumber: string }) {
-  return (
-    <div className="mt-3 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
-      <Clock size={14} className="text-blue-500 flex-shrink-0" />
-      <div>
-        <div className="text-blue-700 text-xs font-semibold">Awaiting Payment</div>
-        <div className="text-blue-500 text-[11px]">
-          Order #{orderNumber} is held until payment is confirmed.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Inner component — can use useSearchParams safely ─
-function OrdersContent() {
+export default function CustomerOrdersPage() {
   const { isAuthenticated } = useAuthStore();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const addItem = useCartStore((s) => s.addItem);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,31 +112,9 @@ function OrdersContent() {
   useEffect(() => {
     if (!isAuthenticated) { router.push('/customer/login'); return; }
     orderApi.getMyOrders()
-      .then((res) => {
-        setOrders(res.data.data);
-
-        // ── Handle Safepay redirect-back URL params ─────
-        // Safepay adds ?payment=success&order=<orderId> on success
-        //             ?payment=cancelled              on cancel
-        const paymentParam = searchParams.get('payment');
-        const orderId      = searchParams.get('order');
-
-        if (paymentParam === 'success') {
-          const orders: Order[] = res.data.data;
-          const targetOrder = orderId ? orders.find((o) => o.id === orderId) : null;
-          const label = targetOrder
-            ? `Payment confirmed for #${targetOrder.orderNumber} 🎉`
-            : 'Payment confirmed! 🎉';
-          toast.success(label, { duration: 5000 });
-          // Remove query params from URL without reload
-          window.history.replaceState({}, '', '/customer/orders');
-        } else if (paymentParam === 'cancelled') {
-          toast.error('Payment was cancelled. Your order is on hold.', { duration: 5000 });
-          window.history.replaceState({}, '', '/customer/orders');
-        }
-      })
+      .then((res) => setOrders(res.data.data))
       .finally(() => setLoading(false));
-  }, [isAuthenticated, router, searchParams]);
+  }, [isAuthenticated, router]);
 
   // Live order tracking via SSE
   useSSE({
@@ -176,55 +135,23 @@ function OrdersContent() {
           });
         }
       },
-
-      // ── Safepay payment confirmed ─────────────────────
-      // When Safepay webhook fires, backend sends this to the customer.
-      // We update the order's paymentStatus and show a toast.
-      PAYMENT_CONFIRMED: (data: any) => {
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === data.orderId
-              ? { ...o, paymentStatus: 'paid' }
-              : o
-          )
-        );
-        toast.success(`Payment confirmed for #${data.orderNumber}! 🎉`, {
-          duration: 5000,
-          style: { background: '#f0fdf4', color: '#166534', border: '1px solid #86efac' },
-        });
-      },
-
-      // ── Safepay payment failed ─────────────────────────
-      PAYMENT_FAILED: (data: any) => {
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === data.orderId
-              ? { ...o, paymentStatus: 'failed', status: 'cancelled' }
-              : o
-          )
-        );
-        toast.error(`Payment failed — order cancelled. ${data.reason ?? ''}`, {
-          duration: 6000,
-        });
-      },
     },
   });
 
-  // ── Reorder handler ───────────────────────────────────
-  // NOTE: We do NOT carry over selectedModifiers because snapshots
-  // don't store modifier IDs — only names. Passing fake IDs would
-  // break the inventory validation on order placement.
-  // Customer sees items in cart and can re-select modifiers.
   const handleReorder = (order: Order) => {
     let added = 0;
     for (const item of order.items) {
       addItem({
-        menuItemId:        item.menuItemId,
-        name:              item.menuItemName,
-        quantity:          item.quantity,
-        unitPrice:         item.unitPrice,
-        totalPrice:        item.unitPrice * item.quantity, // recalculate without modifier prices
-        selectedModifiers: [], // ✅ intentionally empty — modifier IDs not in snapshot
+        menuItemId: item.id,
+        name: item.menuItemName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        selectedModifiers: item.selectedModifiers.map((m) => ({
+          id: m.name,
+          name: m.name,
+          priceAdjustment: 0,
+        })),
       });
       added++;
     }
@@ -232,11 +159,8 @@ function OrdersContent() {
     router.push('/customer/cart');
   };
 
-  // Pending Safepay orders (awaiting payment) shown separately
-  const awaitingPayment = orders.filter((o) => o.paymentStatus === 'pending');
   const active = orders.filter((o) =>
-    ['pending', 'preparing', 'ready', 'assigned', 'picked_up'].includes(o.status) &&
-    o.paymentStatus !== 'pending' // exclude unconfirmed Safepay orders
+    ['pending', 'preparing', 'ready', 'assigned', 'picked_up'].includes(o.status)
   );
   const past = orders.filter((o) => ['completed', 'cancelled'].includes(o.status));
 
@@ -264,38 +188,7 @@ function OrdersContent() {
         </div>
       ) : (
         <div className="space-y-4">
-
-          {/* ── Awaiting Payment ─────────────────────── */}
-          {awaitingPayment.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Clock size={14} className="text-blue-400" />
-                <h2 className="font-display font-bold text-sm text-blue-500 uppercase tracking-widest">
-                  Awaiting Payment
-                </h2>
-              </div>
-              <div className="space-y-3">
-                {awaitingPayment.map((order) => (
-                  <div key={order.id} className="bg-white rounded-2xl border border-blue-100 p-5">
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
-                        <div className="font-display font-bold text-[#1c1714] text-sm mt-0.5">
-                          Rs. {Math.round(order.total)}
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100 font-bold">
-                        Pending Payment
-                      </span>
-                    </div>
-                    <AwaitingPaymentBanner orderNumber={order.orderNumber} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Active Orders ─────────────────────────── */}
+          {/* Active Orders */}
           {active.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -314,7 +207,7 @@ function OrdersContent() {
                       <div>
                         <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
                         <div className="font-display font-bold text-amber-600 text-sm mt-0.5">
-                          Rs. {Math.round(order.total)}
+                          ${order.total.toFixed(2)}
                         </div>
                       </div>
                       <span className="text-[11px] text-[#a39083]">
@@ -328,7 +221,7 @@ function OrdersContent() {
             </div>
           )}
 
-          {/* ── Past Orders ───────────────────────────── */}
+          {/* Past Orders */}
           {past.length > 0 && (
             <div>
               <h2 className="font-display font-bold text-sm text-[#5c5147] uppercase tracking-widest mb-3">
@@ -365,7 +258,7 @@ function OrdersContent() {
                         </div>
                         <div className="text-right flex-shrink-0 flex items-center gap-3">
                           <span className="font-display font-bold text-amber-600">
-                            Rs. {Math.round(order.total)}
+                            ${order.total.toFixed(2)}
                           </span>
                           {isExp ? <ChevronUp size={14} className="text-[#a39083]" /> : <ChevronDown size={14} className="text-[#a39083]" />}
                         </div>
@@ -387,32 +280,18 @@ function OrdersContent() {
                                   )}
                                 </div>
                                 <span className="text-[#5c5147] text-sm flex-shrink-0">
-                                  Rs. {Math.round(item.totalPrice)}
+                                  ${item.totalPrice.toFixed(2)}
                                 </span>
                               </div>
                             ))}
                           </div>
 
                           <div className="mt-4 pt-3 border-t border-[#ece6dc] space-y-1 text-xs text-[#a39083]">
-                            <div className="flex justify-between">
-                              <span>Subtotal</span>
-                              <span>Rs. {Math.round(order.subtotal)}</span>
-                            </div>
-                            {order.deliveryFee > 0 && (
-                              <div className="flex justify-between">
-                                <span>Delivery fee</span>
-                                <span>Rs. {Math.round(order.deliveryFee)}</span>
-                              </div>
-                            )}
-                            {order.serviceCharge > 0 && (
-                              <div className="flex justify-between">
-                                <span>Service charge</span>
-                                <span>Rs. {Math.round(order.serviceCharge)}</span>
-                              </div>
-                            )}
+                            <div className="flex justify-between"><span>Subtotal</span><span>${order.subtotal.toFixed(2)}</span></div>
+                            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>${order.deliveryFee.toFixed(2)}</span></div>}
+                            {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service charge</span><span>${order.serviceCharge.toFixed(2)}</span></div>}
                             <div className="flex justify-between font-display font-bold text-[#1c1714] text-sm pt-1 border-t border-[#ece6dc]">
-                              <span>Total</span>
-                              <span>Rs. {Math.round(order.total)}</span>
+                              <span>Total</span><span>${order.total.toFixed(2)}</span>
                             </div>
                           </div>
 
@@ -435,14 +314,5 @@ function OrdersContent() {
         </div>
       )}
     </div>
-  );
-}
-
-// Wrap in Suspense because useSearchParams requires it in Next.js App Router
-export default function CustomerOrdersPage() {
-  return (
-    <Suspense fallback={<div className="pt-5 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="skeleton h-36 rounded-2xl" />)}</div>}>
-      <OrdersContent />
-    </Suspense>
   );
 }

@@ -1,0 +1,142 @@
+﻿
+> cheezyhub-backend@1.0.0 dev
+> tsx watch src/index.ts
+
+≡ƒºÇ CheezyHub API running on http://localhost:4000
+[0mGET /health [32m200[0m 2.614 ms - 54[0m
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."deals"."id", "public"."deals"."title", "public"."deals"."description", "public"."deals"."imageUrl", "public"."deals"."dealType"::text, "public"."deals"."discountType", "public"."deals"."discountValue", "public"."deals"."linkedItemIds", "public"."deals"."validFrom", "public"."deals"."validTo", "public"."deals"."displayLocation"::text, "public"."deals"."isActive", "public"."deals"."sortOrder", "public"."deals"."createdAt", "public"."deals"."updatedAt" FROM "public"."deals" WHERE ("public"."deals"."isActive" = $1 AND "public"."deals"."validFrom" <= $2 AND ("public"."deals"."validTo" IS NULL OR "public"."deals"."validTo" >= $3)) ORDER BY "public"."deals"."sortOrder" ASC, "public"."deals"."createdAt" DESC OFFSET $4
+prisma:query COMMIT
+[0mGET /api/deals [36m304[0m 3717.195 ms - -[0m
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query BEGIN
+prisma:query SELECT "public"."deals"."id", "public"."deals"."title", "public"."deals"."description", "public"."deals"."imageUrl", "public"."deals"."dealType"::text, "public"."deals"."discountType", "public"."deals"."discountValue", "public"."deals"."linkedItemIds", "public"."deals"."validFrom", "public"."deals"."validTo", "public"."deals"."displayLocation"::text, "public"."deals"."isActive", "public"."deals"."sortOrder", "public"."deals"."createdAt", "public"."deals"."updatedAt" FROM "public"."deals" WHERE ("public"."deals"."isActive" = $1 AND "public"."deals"."validFrom" <= $2 AND ("public"."deals"."validTo" IS NULL OR "public"."deals"."validTo" >= $3)) ORDER BY "public"."deals"."sortOrder" ASC, "public"."deals"."createdAt" DESC OFFSET $4
+prisma:query DEALLOCATE ALL
+[0mPOST /api/addresses/gps [33m403[0m 0.561 ms - 37[0m
+prisma:query COMMIT
+[0mGET /api/deals [36m304[0m 1041.824 ms - -[0m
+prisma:query SELECT "public"."categories"."id", "public"."categories"."name", "public"."categories"."sortOrder" FROM "public"."categories" WHERE 1=1 ORDER BY "public"."categories"."sortOrder" ASC OFFSET $1
+prisma:query SELECT "public"."menu_items"."id", "public"."menu_items"."name", "public"."menu_items"."description", "public"."menu_items"."basePrice", "public"."menu_items"."imageUrl", "public"."menu_items"."isAvailable", "public"."menu_items"."sortOrder", "public"."menu_items"."categoryId", "public"."menu_items"."createdAt", "public"."menu_items"."updatedAt" FROM "public"."menu_items" WHERE ("public"."menu_items"."isAvailable" = $1 AND "public"."menu_items"."categoryId" IN ($2,$3,$4,$5)) ORDER BY "public"."menu_items"."sortOrder" ASC OFFSET $6
+prisma:query SELECT "public"."modifier_groups"."id", "public"."modifier_groups"."name", "public"."modifier_groups"."required", "public"."modifier_groups"."multiSelect", "public"."modifier_groups"."sortOrder", "public"."modifier_groups"."menuItemId" FROM "public"."modifier_groups" WHERE "public"."modifier_groups"."menuItemId" IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ORDER BY "public"."modifier_groups"."sortOrder" ASC OFFSET $20
+prisma:query SELECT "public"."modifiers"."id", "public"."modifiers"."name", "public"."modifiers"."priceAdjustment", "public"."modifiers"."isAvailable", "public"."modifiers"."sortOrder", "public"."modifiers"."modifierGroupId" FROM "public"."modifiers" WHERE "public"."modifiers"."modifierGroupId" IN ($1,$2,$3,$4,$5,$6,$7,$8) ORDER BY "public"."modifiers"."sortOrder" ASC OFFSET $9
+prisma:query COMMIT
+[0mGET /api/menu [36m304[0m 6982.074 ms - -[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.613 ms - 37[0m
+prisma:query BEGIN
+[0mPOST /api/addresses/gps [33m403[0m 0.509 ms - 37[0m
+prisma:query DEALLOCATE ALL
+[0mPOST /api/addresses/gps [33m403[0m 0.377 ms - 37[0m
+prisma:query SELECT "public"."categories"."id", "public"."categories"."name", "public"."categories"."sortOrder" FROM "public"."categories" WHERE 1=1 ORDER BY "public"."categories"."sortOrder" ASC OFFSET $1
+[0mPOST /api/addresses/gps [33m403[0m 0.499 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.466 ms - 37[0m
+prisma:query SELECT "public"."menu_items"."id", "public"."menu_items"."name", "public"."menu_items"."description", "public"."menu_items"."basePrice", "public"."menu_items"."imageUrl", "public"."menu_items"."isAvailable", "public"."menu_items"."sortOrder", "public"."menu_items"."categoryId", "public"."menu_items"."createdAt", "public"."menu_items"."updatedAt" FROM "public"."menu_items" WHERE ("public"."menu_items"."isAvailable" = $1 AND "public"."menu_items"."categoryId" IN ($2,$3,$4,$5)) ORDER BY "public"."menu_items"."sortOrder" ASC OFFSET $6
+[0mPOST /api/addresses/gps [33m403[0m 0.449 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.488 ms - 37[0m
+prisma:query SELECT "public"."modifier_groups"."id", "public"."modifier_groups"."name", "public"."modifier_groups"."required", "public"."modifier_groups"."multiSelect", "public"."modifier_groups"."sortOrder", "public"."modifier_groups"."menuItemId" FROM "public"."modifier_groups" WHERE "public"."modifier_groups"."menuItemId" IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ORDER BY "public"."modifier_groups"."sortOrder" ASC OFFSET $20
+[0mPOST /api/addresses/gps [33m403[0m 0.448 ms - 37[0m
+prisma:query SELECT "public"."modifiers"."id", "public"."modifiers"."name", "public"."modifiers"."priceAdjustment", "public"."modifiers"."isAvailable", "public"."modifiers"."sortOrder", "public"."modifiers"."modifierGroupId" FROM "public"."modifiers" WHERE "public"."modifiers"."modifierGroupId" IN ($1,$2,$3,$4,$5,$6,$7,$8) ORDER BY "public"."modifiers"."sortOrder" ASC OFFSET $9
+prisma:query COMMIT
+[0mGET /api/menu [36m304[0m 2365.934 ms - -[0m
+prisma:query BEGIN
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."deals"."id", "public"."deals"."title", "public"."deals"."description", "public"."deals"."imageUrl", "public"."deals"."dealType"::text, "public"."deals"."discountType", "public"."deals"."discountValue", "public"."deals"."linkedItemIds", "public"."deals"."validFrom", "public"."deals"."validTo", "public"."deals"."displayLocation"::text, "public"."deals"."isActive", "public"."deals"."sortOrder", "public"."deals"."createdAt", "public"."deals"."updatedAt" FROM "public"."deals" WHERE ("public"."deals"."isActive" = $1 AND "public"."deals"."validFrom" <= $2 AND ("public"."deals"."validTo" IS NULL OR "public"."deals"."validTo" >= $3)) ORDER BY "public"."deals"."sortOrder" ASC, "public"."deals"."createdAt" DESC OFFSET $4
+prisma:query SELECT "public"."categories"."id", "public"."categories"."name", "public"."categories"."sortOrder" FROM "public"."categories" WHERE 1=1 ORDER BY "public"."categories"."sortOrder" ASC OFFSET $1
+prisma:query COMMIT
+[0mGET /api/deals [36m304[0m 1039.889 ms - -[0m
+prisma:query SELECT 1
+prisma:query BEGIN
+prisma:query SELECT "public"."menu_items"."id", "public"."menu_items"."name", "public"."menu_items"."description", "public"."menu_items"."basePrice", "public"."menu_items"."imageUrl", "public"."menu_items"."isAvailable", "public"."menu_items"."sortOrder", "public"."menu_items"."categoryId", "public"."menu_items"."createdAt", "public"."menu_items"."updatedAt" FROM "public"."menu_items" WHERE ("public"."menu_items"."isAvailable" = $1 AND "public"."menu_items"."categoryId" IN ($2,$3,$4,$5)) ORDER BY "public"."menu_items"."sortOrder" ASC OFFSET $6
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."modifier_groups"."id", "public"."modifier_groups"."name", "public"."modifier_groups"."required", "public"."modifier_groups"."multiSelect", "public"."modifier_groups"."sortOrder", "public"."modifier_groups"."menuItemId" FROM "public"."modifier_groups" WHERE "public"."modifier_groups"."menuItemId" IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ORDER BY "public"."modifier_groups"."sortOrder" ASC OFFSET $20
+prisma:query SELECT "public"."deals"."id", "public"."deals"."title", "public"."deals"."description", "public"."deals"."imageUrl", "public"."deals"."dealType"::text, "public"."deals"."discountType", "public"."deals"."discountValue", "public"."deals"."linkedItemIds", "public"."deals"."validFrom", "public"."deals"."validTo", "public"."deals"."displayLocation"::text, "public"."deals"."isActive", "public"."deals"."sortOrder", "public"."deals"."createdAt", "public"."deals"."updatedAt" FROM "public"."deals" WHERE ("public"."deals"."isActive" = $1 AND "public"."deals"."validFrom" <= $2 AND ("public"."deals"."validTo" IS NULL OR "public"."deals"."validTo" >= $3)) ORDER BY "public"."deals"."sortOrder" ASC, "public"."deals"."createdAt" DESC OFFSET $4
+prisma:query COMMIT
+[0mGET /api/deals [36m304[0m 1245.810 ms - -[0m
+prisma:query SELECT "public"."modifiers"."id", "public"."modifiers"."name", "public"."modifiers"."priceAdjustment", "public"."modifiers"."isAvailable", "public"."modifiers"."sortOrder", "public"."modifiers"."modifierGroupId" FROM "public"."modifiers" WHERE "public"."modifiers"."modifierGroupId" IN ($1,$2,$3,$4,$5,$6,$7,$8) ORDER BY "public"."modifiers"."sortOrder" ASC OFFSET $9
+prisma:query COMMIT
+[0mGET /api/menu [36m304[0m 2592.555 ms - -[0m
+prisma:query SELECT 1
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."categories"."id", "public"."categories"."name", "public"."categories"."sortOrder" FROM "public"."categories" WHERE 1=1 ORDER BY "public"."categories"."sortOrder" ASC OFFSET $1
+prisma:query SELECT "public"."menu_items"."id", "public"."menu_items"."name", "public"."menu_items"."description", "public"."menu_items"."basePrice", "public"."menu_items"."imageUrl", "public"."menu_items"."isAvailable", "public"."menu_items"."sortOrder", "public"."menu_items"."categoryId", "public"."menu_items"."createdAt", "public"."menu_items"."updatedAt" FROM "public"."menu_items" WHERE ("public"."menu_items"."isAvailable" = $1 AND "public"."menu_items"."categoryId" IN ($2,$3,$4,$5)) ORDER BY "public"."menu_items"."sortOrder" ASC OFFSET $6
+prisma:query SELECT "public"."modifier_groups"."id", "public"."modifier_groups"."name", "public"."modifier_groups"."required", "public"."modifier_groups"."multiSelect", "public"."modifier_groups"."sortOrder", "public"."modifier_groups"."menuItemId" FROM "public"."modifier_groups" WHERE "public"."modifier_groups"."menuItemId" IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ORDER BY "public"."modifier_groups"."sortOrder" ASC OFFSET $20
+prisma:query SELECT "public"."modifiers"."id", "public"."modifiers"."name", "public"."modifiers"."priceAdjustment", "public"."modifiers"."isAvailable", "public"."modifiers"."sortOrder", "public"."modifiers"."modifierGroupId" FROM "public"."modifiers" WHERE "public"."modifiers"."modifierGroupId" IN ($1,$2,$3,$4,$5,$6,$7,$8) ORDER BY "public"."modifiers"."sortOrder" ASC OFFSET $9
+prisma:query COMMIT
+[0mGET /api/menu [36m304[0m 2581.689 ms - -[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.480 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.408 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.399 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.390 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.432 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.339 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.352 ms - 37[0m
+[0mPOST /api/addresses/gps [33m403[0m 0.312 ms - 37[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTI2MTUsImV4cCI6MTc3MzM5OTAxNX0.5czkn5YUzLJFBVuwtSlYUMHcHi9PXqNw6zFPnV1t_JM [32m200[0m 0.402 ms - -[0m
+[0mGET /api/addresses [33m403[0m 0.321 ms - 37[0m
+[0mGET /api/addresses [33m403[0m 0.438 ms - 37[0m
+prisma:query SELECT 1
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."users"."id", "public"."users"."name", "public"."users"."mobile", "public"."users"."email", "public"."users"."pinHash", "public"."users"."role"::text, "public"."users"."adminNote", "public"."users"."isBlocked", "public"."users"."createdAt", "public"."users"."updatedAt", "public"."users"."otpHash", "public"."users"."otpExpiresAt", "public"."users"."otpAttempts", "public"."users"."otpLastSentAt", "public"."users"."isVerified", "public"."users"."tags", "public"."users"."liveLat", "public"."users"."liveLng", "public"."users"."liveAddress", "public"."users"."isLocationVerified", "public"."users"."defaultAddressId" FROM "public"."users" WHERE (("public"."users"."mobile" = $1 OR "public"."users"."email" = $2) AND "public"."users"."role" = CAST($3::text AS "public"."UserRole")) LIMIT $4 OFFSET $5
+prisma:query ROLLBACK
+prisma:error 
+Invalid `prisma.user.findFirst()` invocation in
+D:\cheezyhub-v4\cheezyhub\backend\src\routes\auth.ts:33:38
+
+  30 
+  31 try {
+  32   if (role === 'customer') {
+ΓåÆ 33     const user = await prisma.user.findFirst(
+Inconsistent column data: Could not convert value [] of the field `tags` to type `Json`.
+[0mPOST /api/auth/login [31m500[0m 1345.915 ms - 40[0m
+prisma:query SELECT 1
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."users"."id", "public"."users"."name", "public"."users"."mobile", "public"."users"."email", "public"."users"."pinHash", "public"."users"."role"::text, "public"."users"."adminNote", "public"."users"."isBlocked", "public"."users"."createdAt", "public"."users"."updatedAt", "public"."users"."otpHash", "public"."users"."otpExpiresAt", "public"."users"."otpAttempts", "public"."users"."otpLastSentAt", "public"."users"."isVerified", "public"."users"."tags", "public"."users"."liveLat", "public"."users"."liveLng", "public"."users"."liveAddress", "public"."users"."isLocationVerified", "public"."users"."defaultAddressId" FROM "public"."users" WHERE (("public"."users"."mobile" = $1 OR "public"."users"."email" = $2) AND "public"."users"."role" = CAST($3::text AS "public"."UserRole")) LIMIT $4 OFFSET $5
+prisma:query ROLLBACK
+prisma:error 
+Invalid `prisma.user.findFirst()` invocation in
+D:\cheezyhub-v4\cheezyhub\backend\src\routes\auth.ts:33:38
+
+  30 
+  31 try {
+  32   if (role === 'customer') {
+ΓåÆ 33     const user = await prisma.user.findFirst(
+Inconsistent column data: Could not convert value [] of the field `tags` to type `Json`.
+[0mPOST /api/auth/login [31m500[0m 1291.961 ms - 40[0m
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query SELECT "public"."staff"."id", "public"."staff"."username", "public"."staff"."pinHash", "public"."staff"."role"::text, "public"."staff"."isActive", "public"."staff"."fullName", "public"."staff"."phone", "public"."staff"."lastLoginAt", "public"."staff"."createdAt", "public"."staff"."updatedAt", "public"."staff"."vehicleType", "public"."staff"."vehiclePlate", "public"."staff"."emergencyContact", "public"."staff"."cnic", "public"."staff"."cnicFrontUrl", "public"."staff"."cnicBackUrl", "public"."staff"."licensePhotoUrl", "public"."staff"."profilePhotoUrl", "public"."staff"."verificationStatus", "public"."staff"."verificationNote", "public"."staff"."verifiedAt", "public"."staff"."verifiedBy", "public"."staff"."driverStatus", "public"."staff"."codPending", "public"."staff"."totalDeliveries", "public"."staff"."todayDeliveries", "public"."staff"."activeOrderCount" FROM "public"."staff" WHERE ("public"."staff"."username" = $1 AND "public"."staff"."isActive" = $2) LIMIT $3 OFFSET $4
+prisma:query COMMIT
+prisma:query BEGIN
+prisma:query DEALLOCATE ALL
+prisma:query UPDATE "public"."staff" SET "lastLoginAt" = $1, "updatedAt" = $2 WHERE ("public"."staff"."id" = $3 AND 1=1) RETURNING "public"."staff"."id", "public"."staff"."username", "public"."staff"."pinHash", "public"."staff"."role"::text, "public"."staff"."isActive", "public"."staff"."fullName", "public"."staff"."phone", "public"."staff"."lastLoginAt", "public"."staff"."createdAt", "public"."staff"."updatedAt", "public"."staff"."vehicleType", "public"."staff"."vehiclePlate", "public"."staff"."emergencyContact", "public"."staff"."cnic", "public"."staff"."cnicFrontUrl", "public"."staff"."cnicBackUrl", "public"."staff"."licensePhotoUrl", "public"."staff"."profilePhotoUrl", "public"."staff"."verificationStatus", "public"."staff"."verificationNote", "public"."staff"."verifiedAt", "public"."staff"."verifiedBy", "public"."staff"."driverStatus", "public"."staff"."codPending", "public"."staff"."totalDeliveries", "public"."staff"."todayDeliveries", "public"."staff"."activeOrderCount"
+prisma:query COMMIT
+[0mPOST /api/auth/login [32m200[0m 2240.633 ms - 333[0m
+[0mGET /api/kitchen/orders [33m401[0m 0.147 ms - 45[0m
+[0mGET /api/kitchen/orders [33m401[0m 0.144 ms - 45[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.346 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTI2MTUsImV4cCI6MTc3MzM5OTAxNX0.5czkn5YUzLJFBVuwtSlYUMHcHi9PXqNw6zFPnV1t_JM [32m200[0m 3.019 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.406 ms - -[0m
+prisma:error Error in PostgreSQL connection: Error { kind: Closed, cause: None }
+prisma:error Error in PostgreSQL connection: Error { kind: Closed, cause: None }
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.365 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.287 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.313 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.288 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.306 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.351 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.434 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.281 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.270 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.289 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.300 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.276 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.285 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.283 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.445 ms - -[0m
+[0mGET /api/sse/connect?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW1lejY2b2swMDAzYnUxZ2o3dnU2Zms4Iiwicm9sZSI6ImtpdGNoZW4iLCJpYXQiOjE3NzMzMTMxMzMsImV4cCI6MTc3MzM5OTUzM30.DWfWL1VSr2SAS70_Rcl-oPQoMFlG8_L6A2czo6frYlg [32m200[0m 0.321 ms - -[0m
