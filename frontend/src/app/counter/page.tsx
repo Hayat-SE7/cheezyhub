@@ -10,7 +10,6 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useCounterStore } from '@/store/counterStore';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineQueueStore } from '@/store/offlineQueueStore';
 import { counterApi } from '@/lib/api';
@@ -52,10 +51,8 @@ interface LocalOrder {
 
 // ─── Main component ───────────────────────────────────────────────
 export default function CounterPage() {
-  const { theme } = useCounterStore();
   const { isOnline, isOffline, status } = useOnlineStatus();
   const { enqueue, pendingCount, isFull, items: queueItems } = useOfflineQueueStore();
-  const isDark = theme === 'dark';
 
   const [categories,    setCategories]    = useState<Category[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -231,21 +228,21 @@ export default function CounterPage() {
     }
   };
 
-  // ─── Theme classes ────────────────────────────────────────────
-  const bg        = isDark ? 'bg-[#07070a]'  : 'bg-[#f5f3ef]';
-  const card      = isDark ? 'bg-[#0c0c0e] border-[#1e1e22]' : 'bg-white border-[#e8e3da]';
-  const text      = isDark ? 'text-[#f2f2f5]' : 'text-[#1c1714]';
-  const sub       = isDark ? 'text-[#4a4a58]'  : 'text-[#a39083]';
-  const itemBg    = isDark ? 'bg-[#14141c] hover:bg-[#1a1a24] border-[#1e1e22]' : 'bg-white hover:bg-amber-50 border-[#ece6dc]';
-  const inputCls  = isDark ? 'bg-[#14141c] border-[#1e1e22] text-[#f2f2f5] placeholder-[#3a3a48]' : 'bg-white border-[#e8e3da] text-[#1c1714] placeholder-[#a39083]';
+  // Fixed dark theme — Bento Grid
+  const bg        = 'bg-[#09090E]';
+  const card      = 'bg-[#0F0F14] border-[#1E1E28]';
+  const text      = 'text-[#F2F2F5]';
+  const sub       = 'text-[#4A4A58]';
+  const itemBg    = 'bg-[#0F0F14] hover:bg-[#161620] border-[#1E1E28]';
+  const inputCls  = 'bg-[#0F0F14] border-[#1E1E28] text-[#F2F2F5] placeholder-[#3A3A48]';
 
   // Category items
   const currentCategory = categories.find((c) => c.id === activeCategory);
 
   if (loading) {
     return (
-      <div className={clsx('h-full flex items-center justify-center', bg)}>
-        <div className="text-center text-[#4a4a58]">
+      <div className="h-full flex items-center justify-center bg-[#09090E]">
+        <div className="text-center text-[#4A4A58]">
           <div className="text-4xl mb-3 animate-bounce">🧀</div>
           <p className="text-sm">Loading menu…</p>
         </div>
@@ -254,17 +251,18 @@ export default function CounterPage() {
   }
 
   return (
-    <div className={clsx('h-full flex overflow-hidden', bg)}>
+    <div className="h-full flex flex-col md:flex-row overflow-hidden bg-[#09090E]">
       {/* ── Category sidebar ── */}
-      <div className={clsx('w-36 flex-shrink-0 border-r flex flex-col overflow-y-auto', isDark ? 'bg-[#0c0c0e] border-[#1e1e22]' : 'bg-white border-[#e8e3da]')}>
+      <div className="flex-shrink-0 overflow-auto flex flex-row md:flex-col md:w-36 border-b md:border-b-0 md:border-r bg-[#0F0F14] border-[#1E1E28]">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={clsx('px-3 py-3 text-left text-xs font-semibold transition-colors border-l-2',
+            className={clsx('px-3 py-3 text-left text-xs font-semibold transition-colors whitespace-nowrap md:whitespace-normal border-b-2 md:border-b-0 md:border-l-2',
               activeCategory === cat.id
                 ? 'border-amber-500 bg-amber-500/10 text-amber-500'
-                : clsx('border-transparent', isDark ? 'text-[#9898a5] hover:text-[#f2f2f5] hover:bg-[#14141c]' : 'text-[#6b6057] hover:bg-amber-50'))}
+                : 'border-transparent text-[#9898A5] hover:text-[#F2F2F5] hover:bg-[#161620]'
+            )}
           >
             {cat.name}
           </button>
@@ -316,9 +314,9 @@ export default function CounterPage() {
       </div>
 
       {/* ── Cart panel ── */}
-      <div className={clsx('w-72 flex-shrink-0 border-l flex flex-col', isDark ? 'bg-[#0c0c0e] border-[#1e1e22]' : 'bg-white border-[#e8e3da]')}>
+      <div className="w-72 flex-shrink-0 border-l border-[#1E1E28] flex flex-col bg-[#0F0F14]">
         {/* Cart header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e1e22]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1E1E28]">
           <div className="flex items-center gap-2">
             <ShoppingCart size={15} className="text-amber-400" />
             <span className={clsx('font-display font-bold text-sm', text)}>Cart</span>
@@ -368,11 +366,11 @@ export default function CounterPage() {
         </div>
 
         {/* Order panel */}
-        <div className="px-3 py-3 border-t border-[#1e1e22] space-y-3">
+        <div className="px-3 py-3 border-t border-[#1E1E28] space-y-3">
           {/* Payment method */}
-          <div className="flex rounded-lg overflow-hidden border border-[#1e1e22]">
+          <div className="flex rounded-lg overflow-hidden border border-[#1E1E28]">
             {(['cash', 'card'] as const).map((m) => (
-              <button key={m} onClick={() => setPaymentMethod(m)} className={clsx('flex-1 py-1.5 text-xs font-semibold capitalize transition-colors', paymentMethod === m ? 'bg-amber-500 text-white' : clsx(isDark ? 'text-[#9898a5] hover:text-[#f2f2f5]' : 'text-[#6b6057] hover:bg-amber-50'))}>
+              <button key={m} onClick={() => setPaymentMethod(m)} className={clsx('flex-1 py-1.5 text-xs font-semibold capitalize transition-colors', paymentMethod === m ? 'bg-amber-500 text-white' : 'text-[#9898A5] hover:text-[#F2F2F5]')}>
                 {m}
               </button>
             ))}
@@ -409,7 +407,7 @@ export default function CounterPage() {
 
         {/* Recent orders */}
         {localOrders.length > 0 && (
-          <div className="border-t border-[#1e1e22] px-3 py-2 max-h-48 overflow-y-auto">
+          <div className="border-t border-[#1E1E28] px-3 py-2 max-h-48 overflow-y-auto">
             <p className={clsx('text-[10px] font-semibold uppercase tracking-wide mb-1.5', sub)}>Recent</p>
             {localOrders.slice(0, 10).map((o) => (
               <div key={o.id} className="flex items-center justify-between py-1.5 border-b border-[#1e1e28] last:border-0">
@@ -435,7 +433,7 @@ export default function CounterPage() {
       {/* ── Modifier modal ── */}
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className={clsx('w-full max-w-sm rounded-2xl border shadow-2xl', card)}>
+          <div className="w-full max-w-sm rounded-2xl border shadow-2xl bg-[#0F0F14] border-[#1E1E28]">
             <div className="px-5 py-4 border-b border-[#1e1e28]">
               <h3 className={clsx('font-display font-bold text-lg', text)}>{selectedItem.name}</h3>
               <p className="text-amber-400 font-bold text-sm">Rs. {selectedItem.basePrice.toFixed(0)}</p>
@@ -459,7 +457,7 @@ export default function CounterPage() {
                             }
                             return { ...prev, [group.id]: active ? [] : [mod.id] };
                           });
-                        }} className={clsx('flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all', active ? 'bg-amber-500 text-white border-amber-500' : clsx(isDark ? 'bg-[#1e1e28] text-[#9898a5] border-[#2e2e38] hover:border-amber-500/40' : 'bg-white text-[#5c5147] border-[#ece6dc] hover:border-amber-300'))}>
+                        }} className={clsx('flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all', active ? 'bg-amber-500 text-white border-amber-500' : 'bg-[#1E1E28] text-[#9898A5] border-[#2E2E38] hover:border-amber-500/40')}>
                           {active && <Check size={10} />}
                           {mod.name}{mod.priceAdjustment > 0 && ` +${mod.priceAdjustment.toFixed(0)}`}
                         </button>
@@ -475,7 +473,7 @@ export default function CounterPage() {
                 <span className={clsx('font-bold w-6 text-center', text)}>{qty}</span>
                 <button onClick={() => setQty(qty + 1)} className="w-8 h-8 rounded-lg bg-[#1e1e28] flex items-center justify-center text-[#9898a5] hover:text-white"><Plus size={13} /></button>
               </div>
-              <button onClick={() => { setSelectedItem(null); setSelectedMods({}); setQty(1); }} className={clsx('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors', isDark ? 'bg-[#1e1e28] text-[#9898a5] hover:text-[#f2f2f5]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>Cancel</button>
+              <button onClick={() => { setSelectedItem(null); setSelectedMods({}); setQty(1); }} className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors bg-[#1E1E28] text-[#9898A5] hover:text-[#F2F2F5]">Cancel</button>
               <button onClick={() => addToCart(selectedItem)} className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm">Add</button>
             </div>
           </div>

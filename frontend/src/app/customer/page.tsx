@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { menuApi, dealsApi } from '@/lib/api';
 import { useSSE } from '@/hooks/useSSE';
 import { useCartStore } from '@/store/cartStore';
@@ -9,6 +10,7 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import HeroSlider from '@/components/customer/HeroSlider';
 import DealsSection from '@/components/customer/DealsSection';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ─── Types ───────────────────────────────────────────
 
@@ -132,18 +134,18 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.35 }}
-      className={`bg-white rounded-2xl border border-[#ece6dc] overflow-hidden shadow-sm ${
-        !item.isAvailable ? 'opacity-50' : 'hover:shadow-md hover:border-[#d5c9b5] transition-all'
+      className={`bg-[#1A1208] rounded-2xl border border-[#3D2E12] overflow-hidden ${
+        !item.isAvailable ? 'opacity-50' : 'hover:border-[#5A4020] transition-all'
       }`}
     >
       <div className="flex gap-0">
         {/* Left: text content */}
         <div className="flex-1 p-4">
-          <h3 className={`font-display font-bold text-[#1c1714] text-sm leading-tight ${!item.isAvailable ? 'line-through' : ''}`}>
+          <h3 className={`font-display font-bold text-[#F5E6C8] text-sm leading-tight ${!item.isAvailable ? 'line-through' : ''}`}>
             {item.name}
           </h3>
           {item.description && (
-            <p className="text-[#a39083] text-xs mt-0.5 line-clamp-2 leading-relaxed">{item.description}</p>
+            <p className="text-[#7A6040] text-xs mt-0.5 line-clamp-2 leading-relaxed">{item.description}</p>
           )}
 
           <div className="flex items-center justify-between mt-3">
@@ -180,7 +182,7 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
                 </button>
               )
             ) : (
-              <span className="text-[11px] text-[#a39083] bg-[#f5f0e8] px-3 py-1.5 rounded-xl">
+              <span className="text-[11px] text-[#7A6040] bg-[#2D1F08] px-3 py-1.5 rounded-xl">
                 {paused ? 'Paused' : 'Unavailable'}
               </span>
             )}
@@ -196,7 +198,7 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-[#2D1F08] to-[#1A1208] flex items-center justify-center">
               <span className="text-4xl">{
                 item.name.toLowerCase().includes('pizza') ? '🍕' :
                 item.name.toLowerCase().includes('burger') ? '🍔' :
@@ -215,12 +217,12 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
 
       {/* Modifier panel */}
       {showModifiers && (
-        <div className="border-t border-[#f0ebe2] bg-[#faf9f6] p-4 animate-fade-in">
+        <div className="border-t border-[#3D2E12] bg-[#120D06] p-4 animate-fade-in">
           {item.modifierGroups.map((group) => (
             <div key={group.id} className="mb-3 last:mb-0">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-bold text-[#5c5147] uppercase tracking-wide">{group.name}</span>
-                {group.required && <span className="text-[9px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full font-bold">Required</span>}
+                <span className="text-[11px] font-bold text-[#A0886A] uppercase tracking-wide">{group.name}</span>
+                {group.required && <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full font-bold border border-amber-500/20">Required</span>}
               </div>
               <div className="flex flex-wrap gap-2">
                 {group.modifiers.filter((m) => m.isAvailable).map((mod) => {
@@ -231,8 +233,8 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
                       onClick={() => toggleMod(group.id, mod.id, group.multiSelect)}
                       className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-all ${
                         isSelected
-                          ? 'bg-amber-500 text-white border-amber-500'
-                          : 'bg-white text-[#5c5147] border-[#ddd6c8] hover:border-amber-300'
+                          ? 'bg-amber-500 text-[#0F0A04] border-amber-500'
+                          : 'bg-[#1A1208] text-[#7A6040] border-[#3D2E12] hover:border-[#D97706]/40'
                       }`}
                     >
                       {mod.name}
@@ -248,8 +250,8 @@ function MenuCard({ item, paused, index }: { item: MenuItem; paused: boolean; in
             </div>
           ))}
 
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#ece6dc]">
-            <span className="font-display font-bold text-[#1c1714]">${totalPrice.toFixed(2)}</span>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#3D2E12]">
+            <span className="font-display font-bold text-[#F5E6C8]">${totalPrice.toFixed(2)}</span>
             <button
               onClick={handleAdd}
               className="btn-press flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-display font-bold transition-all shadow-md shadow-amber-200"
@@ -273,7 +275,7 @@ function FeaturedSection({ items, paused }: { items: MenuItem[]; paused: boolean
     <div className="mb-7">
       <div className="flex items-center gap-2 mb-3">
         <Flame size={16} className="text-amber-500" />
-        <h2 className="font-display font-bold text-[#1c1714] text-base">Popular Items</h2>
+        <h2 className="font-display font-bold text-[#F5E6C8] text-base">Popular Items</h2>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {items.slice(0, 4).map((item, i) => (
@@ -282,25 +284,25 @@ function FeaturedSection({ items, paused }: { items: MenuItem[]; paused: boolean
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.08 }}
-            className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden shadow-sm hover:shadow-md transition-all"
+            className="bg-[#1A1208] rounded-2xl border border-[#3D2E12] overflow-hidden hover:border-[#5A4020] transition-all"
           >
             {/* Image */}
             <div className="h-28 relative overflow-hidden">
               {item.imageUrl ? (
-                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                <Image src={item.imageUrl} alt={item.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+                <div className="w-full h-full bg-gradient-to-br from-[#2D1F08] to-[#1A1208] flex items-center justify-center">
                   <span className="text-5xl">🧀</span>
                 </div>
               )}
               <div className="absolute top-2 left-2">
-                <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100/90 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-400 bg-amber-900/70 backdrop-blur-sm px-2 py-0.5 rounded-full">
                   <Star size={9} fill="currentColor" /> Popular
                 </span>
               </div>
             </div>
             <div className="p-3">
-              <div className="font-display font-bold text-[#1c1714] text-xs leading-tight line-clamp-1">{item.name}</div>
+              <div className="font-display font-bold text-[#F5E6C8] text-xs leading-tight line-clamp-1">{item.name}</div>
               <div className="flex items-center justify-between mt-2">
                 <span className="font-display font-black text-amber-600 text-sm">${item.basePrice.toFixed(2)}</span>
                 <button
@@ -426,21 +428,21 @@ export default function CustomerMenuPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-4 flex items-start gap-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200"
+          className="mb-4 flex items-start gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20"
         >
           <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
-            <div className="text-amber-800 text-sm font-display font-bold">Kitchen taking a break</div>
-            <div className="text-amber-600/70 text-xs">Check back shortly — we&apos;ll be back soon!</div>
+            <div className="text-amber-400 text-sm font-display font-bold">Kitchen taking a break</div>
+            <div className="text-amber-500/70 text-xs">Check back shortly — we&apos;ll be back soon!</div>
           </div>
         </motion.div>
       )}
 
       {/* Search bar */}
       <div className="relative mb-5">
-        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#a39083]" />
+        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A6040]" />
         <input
-          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-white border border-[#ece6dc] text-[#1c1714] text-sm placeholder:text-[#a39083] outline-none focus:border-amber-300 transition-colors shadow-sm"
+          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#1A1208] border border-[#3D2E12] text-[#F5E6C8] text-sm placeholder:text-[#5A4030] outline-none focus:border-[#D97706]/40 transition-colors"
           placeholder="Search menu..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -474,8 +476,8 @@ export default function CustomerMenuPage() {
               onClick={() => setActiveCategory(cat.id)}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-display font-bold transition-all ${
                 cat.id === activeCategory
-                  ? 'bg-amber-500 text-white shadow-md shadow-amber-200'
-                  : 'bg-white text-[#5c5147] border border-[#ece6dc] hover:border-amber-300'
+                  ? 'bg-[#D97706] text-[#0F0A04] shadow-md shadow-amber-900/30'
+                  : 'bg-[#1A1208] text-[#7A6040] border border-[#3D2E12] hover:border-[#D97706]/40'
               }`}
             >
               {cat.name}
@@ -487,10 +489,10 @@ export default function CustomerMenuPage() {
       {/* Search results label */}
       {searchQuery && (
         <div className="flex items-center justify-between mb-4">
-          <div className="text-sm text-[#5c5147] font-semibold">
+          <div className="text-sm text-[#A0886A] font-semibold">
             {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
           </div>
-          <button onClick={() => setSearchQuery('')} className="text-xs text-amber-600 font-semibold">
+          <button onClick={() => setSearchQuery('')} className="text-xs text-[#D97706] font-semibold">
             Clear
           </button>
         </div>
@@ -515,13 +517,7 @@ export default function CustomerMenuPage() {
           <MenuCard key={item.id} item={item} paused={ordersPaused} index={idx} />
         ))}
         {activeItems.length === 0 && (
-          <div className="py-16 text-center">
-            <div className="text-4xl mb-3">🔍</div>
-            <div className="font-display font-bold text-[#1c1714] text-base">Nothing found</div>
-            <div className="text-[#a39083] text-sm mt-1">
-              {searchQuery ? `No items match "${searchQuery}"` : 'No items in this category'}
-            </div>
-          </div>
+          <EmptyState icon="🔍" title="Nothing found" description={searchQuery ? `No items match "${searchQuery}"` : 'No items in this category'} className="py-16" />
         )}
       </div>
     </div>

@@ -31,7 +31,7 @@ function StatCard({
   icon: any; label: string; value: string | number; sub?: string; color: string; trend?: string;
 }) {
   return (
-    <div className="rounded-2xl bg-[#111113] border border-[#222228] p-5 hover:border-[#2e2e35] transition-colors">
+    <div className="rounded-2xl bg-[#0F0F1A] border border-[#1E1E32] p-5 hover:border-[#2A2A4A] transition-colors">
       <div className="flex items-start justify-between mb-4">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: color + '20' }}>
           <Icon size={17} style={{ color }} />
@@ -42,19 +42,19 @@ function StatCard({
           </span>
         )}
       </div>
-      <div className="font-display font-black text-2xl text-[#f2f2f5]">{value}</div>
-      <div className="text-[#6a6a78] text-xs mt-0.5">{label}</div>
-      {sub && <div className="text-[#3a3a48] text-[10px] mt-0.5">{sub}</div>}
+      <div className="font-display font-black text-2xl text-[#60A5FA]">{value}</div>
+      <div className="text-[#4A4A58] text-xs mt-0.5">{label}</div>
+      {sub && <div className="text-[#3A3A58] text-[10px] mt-0.5">{sub}</div>}
     </div>
   );
 }
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-[#111113] border border-[#222228] p-5">
+    <div className="rounded-2xl bg-[#0F0F1A] border border-[#1E1E32] p-5">
       <div className="mb-4">
-        <h3 className="font-display font-bold text-[#f2f2f5] text-sm">{title}</h3>
-        {subtitle && <p className="text-[#4a4a58] text-xs mt-0.5">{subtitle}</p>}
+        <h3 className="font-display font-bold text-[#F2F2F5] text-sm">{title}</h3>
+        {subtitle && <p className="text-[#4A4A58] text-xs mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -108,10 +108,10 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-7">
         <div>
-          <h1 className="font-display font-black text-3xl text-[#f2f2f5]">
-            🧀 Dashboard
+          <h1 className="font-display font-black text-3xl text-[#F2F2F5]">
+            Dashboard
           </h1>
-          <p className="text-[#4a4a58] text-sm mt-1">
+          <p className="text-[#4A4A58] text-sm mt-1">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
         {/* Orders / Revenue trend */}
-        <div className="lg:col-span-2 rounded-2xl bg-[#111113] border border-[#222228] p-5">
+        <div className="lg:col-span-2 rounded-2xl bg-[#0F0F1A] border border-[#1E1E32] p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-display font-bold text-[#f2f2f5] text-sm">7-Day Trend</h3>
@@ -195,7 +195,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Peak hours */}
-      <div className="rounded-2xl bg-[#111113] border border-[#222228] p-5 mb-6">
+      <div className="rounded-2xl bg-[#0F0F1A] border border-[#1E1E32] p-5 mb-6">
         <div className="mb-4">
           <h3 className="font-display font-bold text-[#f2f2f5] text-sm">Peak Hours</h3>
           <p className="text-[#4a4a58] text-xs mt-0.5">Order volume by hour (last 7 days)</p>
@@ -223,7 +223,7 @@ export default function AdminDashboard() {
           <Link
             key={href}
             href={href}
-            className="flex items-center gap-3 p-4 rounded-2xl bg-[#111113] border border-[#222228] hover:border-[#3a3a40] hover:bg-[#1a1a1d] transition-all group"
+            className="flex items-center gap-3 p-4 rounded-2xl bg-[#0F0F1A] border border-[#1E1E32] hover:border-[#2A2A4A] hover:bg-[#0F1420] transition-all group"
           >
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"

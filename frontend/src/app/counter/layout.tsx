@@ -17,7 +17,7 @@ import { drainQueue, playBeep } from '@/lib/syncQueue';
 import ConnectivityBar from '@/components/counter/ConnectivityBar';
 import FailedQueueModal from '@/components/counter/FailedQueueModal';
 import { counterApi } from '@/lib/api';
-import { Sun, Moon, LogOut, Timer, AlertCircle, AlertTriangle } from 'lucide-react';
+import { LogOut, Timer, AlertCircle, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
@@ -64,12 +64,11 @@ function ShiftBar({ isDark }: { isDark: boolean }) {
 export default function CounterLayout({ children }: { children: React.ReactNode }) {
   const pathname  = usePathname();
   const router    = useRouter();
-  const { theme, toggleTheme, isAuthenticated, user, logout } = useCounterStore();
+  const { isAuthenticated, user, logout } = useCounterStore();
   const { status, rtt, lastOnlineAt } = useOnlineStatus();
   const { hydrate, pendingCount, failedCount } = useOfflineQueueStore();
   const [showFailedModal, setShowFailedModal] = useState(false);
   const prevStatus = useRef(status);
-  const isDark = theme === 'dark';
 
   // Auth guard
   useEffect(() => {
@@ -131,28 +130,25 @@ export default function CounterLayout({ children }: { children: React.ReactNode 
   if (pathname === '/counter/login') return <>{children}</>;
   if (!isAuthenticated) return null;
 
-  const bg     = isDark ? 'bg-[#07070a] text-[#f2f2f5]' : 'bg-[#f5f3ef] text-[#1c1714]';
-  const header = isDark ? 'bg-[#0c0c0e] border-[#1e1e22]' : 'bg-white border-[#e8e3da]';
-
   return (
-    <div className={clsx('min-h-screen flex flex-col', bg)}>
-      {showFailedModal && <FailedQueueModal isDark={isDark} onClose={() => setShowFailedModal(false)} />}
+    <div className="min-h-screen flex flex-col bg-[#09090E] text-[#F2F2F5]">
+      {showFailedModal && <FailedQueueModal isDark={true} onClose={() => setShowFailedModal(false)} />}
 
       {/* Header */}
-      <header className={clsx('flex-shrink-0 border-b flex items-center justify-between px-4 h-12 gap-3 z-40', header)}>
+      <header className="flex-shrink-0 border-b border-[#1E1E28] flex items-center justify-between px-4 h-12 gap-3 z-40 bg-[#0F0F14]">
         {/* Left: logo */}
         <div className="flex items-center gap-2.5 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-sm shadow-md shadow-amber-400/30">🧀</div>
           <div>
-            <span className="font-bold text-sm">CheezyHub</span>
-            <span className={clsx('text-xs ml-1.5', isDark ? 'text-[#4a4a58]' : 'text-[#a39083]')}>POS</span>
+            <span className="font-bold text-sm text-[#F2F2F5]">CheezyHub</span>
+            <span className="text-xs ml-1.5 text-[#4A4A58]">POS</span>
           </div>
         </div>
 
         {/* Center: shift + connectivity */}
         <div className="flex-1 flex items-center justify-center gap-3">
-          <ShiftBar isDark={isDark} />
-          <ConnectivityBar status={status} rtt={rtt} lastOnlineAt={lastOnlineAt} isDark={isDark} />
+          <ShiftBar isDark={true} />
+          <ConnectivityBar status={status} rtt={rtt} lastOnlineAt={lastOnlineAt} isDark={true} />
           {failedCount() > 0 && (
             <button onClick={() => setShowFailedModal(true)} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors font-semibold">
               <AlertTriangle size={11} /> {failedCount()} failed
@@ -162,16 +158,13 @@ export default function CounterLayout({ children }: { children: React.ReactNode 
 
         {/* Right */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={clsx('text-xs font-medium', isDark ? 'text-[#4a4a58]' : 'text-[#a39083]')}>
+          <span className="text-xs font-medium text-[#4A4A58]">
             {user?.username ?? 'Cashier'}
           </span>
-          <button onClick={() => router.push('/counter/shift')} className={clsx('text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors', isDark ? 'bg-[#1a1a1e] text-[#9898a5] hover:text-amber-400 hover:bg-amber-500/10' : 'bg-[#f0ece4] text-[#6b6057] hover:text-amber-700 hover:bg-amber-50')}>
+          <button onClick={() => router.push('/counter/shift')} className="text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors bg-[#1A1A22] text-[#9898A5] hover:text-amber-400 hover:bg-amber-500/10">
             Shift
           </button>
-          <button onClick={toggleTheme} className={clsx('w-8 h-8 rounded-xl flex items-center justify-center transition-all', isDark ? 'text-[#4a4a58] hover:text-amber-400 hover:bg-amber-500/10' : 'text-[#a39083] hover:text-amber-600 hover:bg-amber-50')}>
-            {isDark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-          <button onClick={handleLogout} className={clsx('w-8 h-8 rounded-xl flex items-center justify-center transition-all', isDark ? 'text-[#3a3a48] hover:text-red-400 hover:bg-red-500/10' : 'text-[#c4b8ac] hover:text-red-500 hover:bg-red-50')}>
+          <button onClick={handleLogout} className="w-8 h-8 rounded-xl flex items-center justify-center transition-all text-[#3A3A48] hover:text-red-400 hover:bg-red-500/10">
             <LogOut size={15} />
           </button>
         </div>

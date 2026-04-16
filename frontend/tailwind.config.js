@@ -4,6 +4,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // CheezyHub design tokens
+        ch: {
+          base:          '#080808',
+          surface:       '#0f0f14',
+          elevated:      '#161620',
+          border:        '#1e1e28',
+          amber:         '#D97706',
+          gold:          '#CA8A04',
+          teal:          '#00D4AA',
+          blue:          '#60A5FA',
+          textPrimary:   '#F2F2F5',
+          textSecondary: '#9898A5',
+          textMuted:     '#4A4A58',
+        },
         // Brand
         cheeze: {
           50:  '#fffbeb',

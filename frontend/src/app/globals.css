@@ -50,6 +50,9 @@
   --glass-blur:         20px;
 }
 
+/* ─── Tabular numbers utility ────────────────────────────────────────── */
+.tabular { font-variant-numeric: tabular-nums; }
+
 /* ─── Dark UI Tokens ─────────────────────────────────────────────────── */
 .dark-ui {
   --bg:            #07070a;
