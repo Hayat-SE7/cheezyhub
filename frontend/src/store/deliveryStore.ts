@@ -16,8 +16,8 @@ export interface DeliveryUser {
   verificationStatus: 'PENDING' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED';
   codPending:         number;
   activeOrderCount:   number;
-  todayDeliveries:    number;
-  totalDeliveries:    number;
+  todayDeliveries?:   number;
+  totalDeliveries?:   number;
 }
 
 interface DeliveryState {
@@ -44,7 +44,7 @@ export const useDeliveryStore = create<DeliveryState>()(
       },
 
       logout: () => {
-        Cookies.remove('ch_delivery_token', { path: '/' });
+        Cookies.remove('ch_delivery_token');
         set({ token: null, user: null, isAuthenticated: false });
       },
 

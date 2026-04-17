@@ -1,10 +1,17 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle, ShoppingBag, Home, Clock } from 'lucide-react';
 
-export default function OrderConfirmedPage() {
+// ─────────────────────────────────────────────────────────────────
+//  Inner component — useSearchParams() MUST live inside a component
+//  that is wrapped by <Suspense>. Without this Next.js 14 crashes
+//  during static generation because useSearchParams() reads from
+//  the URL at render time, which isn't available during SSG.
+// ─────────────────────────────────────────────────────────────────
+function OrderConfirmedContent() {
   const params      = useSearchParams();
   const router      = useRouter();
   const orderNumber = params.get('order');
@@ -49,5 +56,24 @@ export default function OrderConfirmedPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  Page export — Suspense is required here so Next.js can
+//  statically generate this route without crashing.
+//  The fallback renders while the params are being read.
+// ─────────────────────────────────────────────────────────────────
+export default function OrderConfirmedPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+        </div>
+      }
+    >
+      <OrderConfirmedContent />
+    </Suspense>
   );
 }

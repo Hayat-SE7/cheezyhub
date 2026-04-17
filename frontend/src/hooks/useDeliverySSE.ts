@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import Cookies from 'js-cookie';
+import { createEventDebouncer } from '@/lib/sseDebounce';
 
 type EventHandler = (data: unknown) => void;
 
@@ -25,6 +26,13 @@ export function useDeliverySSE(
   handlersRef.current = handlers;
 
   const listenersRef = useRef<Record<string, (e: MessageEvent) => void>>({});
+  const retryRef     = useRef(0);
+  const debouncerRef = useRef<ReturnType<typeof createEventDebouncer> | null>(null);
+  if (!debouncerRef.current) {
+    debouncerRef.current = createEventDebouncer((event, data) => {
+      handlersRef.current[event]?.(data);
+    }, 150);
+  }
 
   const connect = useCallback(() => {
     const token = Cookies.get('ch_delivery_token');
@@ -40,7 +48,7 @@ export function useDeliverySSE(
       for (const event of Object.keys(handlersRef.current)) {
         if (listenersRef.current[event]) continue;
         const wrapper = (e: MessageEvent) => {
-          try { handlersRef.current[event]?.(JSON.parse(e.data)); }
+          try { debouncerRef.current!.fire(event, JSON.parse(e.data)); }
           catch { console.warn(`[DeliverySSE] bad parse on "${event}"`); }
         };
         listenersRef.current[event] = wrapper;
@@ -49,18 +57,15 @@ export function useDeliverySSE(
     };
 
     register();
-    setTimeout(register, 0);
 
-    // Route connected event through handlers so dashboard can call fetchOrders() on reconnect
-    es.addEventListener('connected', () => {
-      console.log('[DeliverySSE] ✅ Connected');
-      handlersRef.current['connected']?.({});
-    });
+    es.addEventListener('connected', () => { retryRef.current = 0; });
 
     es.onerror = () => {
+      const delay = Math.min(3000 * Math.pow(2, retryRef.current), 60000);
       es.close();
       listenersRef.current = {};
-      setTimeout(connect, 3000);
+      retryRef.current++;
+      setTimeout(connect, delay);
     };
   }, [enabled]);
 
@@ -69,6 +74,7 @@ export function useDeliverySSE(
     return () => {
       esRef.current?.close();
       listenersRef.current = {};
+      debouncerRef.current?.cancel();
     };
   }, [connect]);
 }

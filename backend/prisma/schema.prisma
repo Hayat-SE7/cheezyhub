@@ -325,7 +325,6 @@ model Payment {
   amount       Float
   currency     String   @default("PKR")
   status       String   @default("pending")  // pending | paid | failed
-  safepayToken String?
   safepayRef   String?
   metadata     Json?
   createdAt    DateTime @default(now())
@@ -372,13 +371,9 @@ model DriverSettlement {
   collectedAmount Float    @default(0)   // total COD the driver had at time of settlement
   submittedAmount Float
   remainingAmount Float    @default(0)   // codPending after settlement
-  settledAmount   Float?
-  status          String   @default("pending")  // pending | settled | disputed
   notes           String?
-  settledBy       String?  // admin Staff id
-  settledAt       DateTime?
+  settledBy       String                 // admin Staff id (NOT NULL in DB)
   createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
   @@map("driver_settlements")
 }
@@ -391,11 +386,10 @@ model HolidayRequest {
   driver      Staff     @relation(fields: [driverId], references: [id])
   fromDate    DateTime
   toDate      DateTime
-  reason      String?
-  status      String    @default("PENDING")  // PENDING | APPROVED | REJECTED
-  reviewedBy  String?   // admin Staff id
+  reason      String                          // NOT NULL in DB
+  status      String    @default("PENDING")   // PENDING | APPROVED | REJECTED
+  reviewedBy  String?                         // admin Staff id
   reviewNote  String?
-  reviewedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

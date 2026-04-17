@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { orderApi } from '@/lib/api';
 import { useSSE } from '@/hooks/useSSE';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +12,7 @@ import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { RotateCcw, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface OrderItem {
   id: string;
@@ -53,6 +56,154 @@ const STATUS_DESCS: Record<string, string> = {
   completed: 'Enjoy your meal!',
   cancelled: 'This order was cancelled',
 };
+
+function PastOrderCard({
+  order,
+  isExp,
+  onToggle,
+  onReorder,
+}: {
+  order: Order;
+  isExp: boolean;
+  onToggle: () => void;
+  onReorder: (o: Order) => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden card-lift animate-slide-up">
+      <div
+        className="flex items-center gap-4 p-4 cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExp}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
+            <span className={clsx(
+              'text-[10px] px-2 py-0.5 rounded-full font-bold capitalize',
+              order.status === 'completed'
+                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                : 'bg-red-50 text-red-500 border border-red-100'
+            )}>
+              {order.status}
+            </span>
+          </div>
+          <div className="text-xs text-[#a39083] mt-1">
+            {order.items.length} item{order.items.length !== 1 ? 's' : ''} ·{' '}
+            {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0 flex items-center gap-3">
+          <span className="font-display font-bold text-amber-600">
+            ${order.total.toFixed(2)}
+          </span>
+          {isExp ? <ChevronUp size={14} className="text-[#a39083]" /> : <ChevronDown size={14} className="text-[#a39083]" />}
+        </div>
+      </div>
+
+      {isExp && (
+        <div className="border-t border-[#ece6dc] px-4 pb-4 animate-fade-in">
+          <div className="mt-4 space-y-2.5">
+            {order.items.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[#1c1714] text-sm font-medium">
+                    {item.quantity}× {item.menuItemName}
+                  </div>
+                  {item.selectedModifiers.length > 0 && (
+                    <div className="text-[11px] text-[#a39083] mt-0.5">
+                      {item.selectedModifiers.map((m) => m.name).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[#5c5147] text-sm flex-shrink-0">
+                  ${item.totalPrice.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#ece6dc] space-y-1 text-xs text-[#a39083]">
+            <div className="flex justify-between"><span>Subtotal</span><span>${order.subtotal.toFixed(2)}</span></div>
+            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>${order.deliveryFee.toFixed(2)}</span></div>}
+            {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service charge</span><span>${order.serviceCharge.toFixed(2)}</span></div>}
+            <div className="flex justify-between font-display font-bold text-[#1c1714] text-sm pt-1 border-t border-[#ece6dc]">
+              <span>Total</span><span>${order.total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {order.status === 'completed' && (
+            <button
+              onClick={() => onReorder(order)}
+              className="btn-press mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-semibold border border-amber-200 transition-colors"
+            >
+              <RotateCcw size={14} /> Reorder
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VirtualPastList({
+  past,
+  expanded,
+  onToggle,
+  onReorder,
+}: {
+  past: Order[];
+  expanded: string | null;
+  onToggle: (id: string) => void;
+  onReorder: (o: Order) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: past.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 200,
+    measureElement: (el) => el.getBoundingClientRect().height + 12,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      ref={parentRef}
+      className="max-h-[70vh] overflow-y-auto"
+      style={{ contain: 'strict' }}
+    >
+      <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+        {virtualizer.getVirtualItems().map((vr) => {
+          const order = past[vr.index];
+          return (
+            <div
+              key={order.id}
+              data-index={vr.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${vr.start}px)`,
+                paddingBottom: 12,
+              }}
+            >
+              <PastOrderCard
+                order={order}
+                isExp={expanded === order.id}
+                onToggle={() => onToggle(order.id)}
+                onReorder={onReorder}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function OrderProgressBar({ status }: { status: string }) {
   if (status === 'cancelled') {
@@ -105,15 +256,20 @@ export default function CustomerOrdersPage() {
   const { isAuthenticated } = useAuthStore();
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const { data: orders = [], isLoading: loading } = useQuery<Order[]>({
+    queryKey: ['my-orders'],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const res = await orderApi.getMyOrders();
+      return res.data.data;
+    },
+  });
+
   useEffect(() => {
-    if (!isAuthenticated) { router.push('/customer/login'); return; }
-    orderApi.getMyOrders()
-      .then((res) => setOrders(res.data.data))
-      .finally(() => setLoading(false));
+    if (!isAuthenticated) router.push('/customer/login');
   }, [isAuthenticated, router]);
 
   // Live order tracking via SSE
@@ -121,11 +277,7 @@ export default function CustomerOrdersPage() {
     enabled: isAuthenticated,
     onEvent: {
       ORDER_UPDATED: (data: any) => {
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === data.orderId ? { ...o, status: data.status } : o
-          )
-        );
+        queryClient.invalidateQueries({ queryKey: ['my-orders'] });
         const label = STATUS_LABELS[data.status];
         if (label) {
           toast(label, {
@@ -175,17 +327,7 @@ export default function CustomerOrdersPage() {
           {[...Array(3)].map((_, i) => <div key={i} className="skeleton h-36 rounded-2xl" />)}
         </div>
       ) : orders.length === 0 ? (
-        <div className="text-center py-20">
-          <ShoppingBag size={48} className="mx-auto mb-4 text-[#d9cfc0]" />
-          <h2 className="font-display font-bold text-[#1c1714] text-lg">No orders yet</h2>
-          <p className="text-[#a39083] text-sm mt-1">Your order history will appear here</p>
-          <button
-            onClick={() => router.push('/customer')}
-            className="mt-5 px-6 py-3 bg-amber-500 text-white rounded-xl font-display font-bold text-sm hover:bg-amber-600 transition-colors"
-          >
-            Browse Menu
-          </button>
-        </div>
+        <EmptyState icon={ShoppingBag} title="No orders yet" description="Your order history will appear here" action={{ label: 'Browse Menu', href: '/customer' }} className="py-20" />
       ) : (
         <div className="space-y-4">
           {/* Active Orders */}
@@ -227,88 +369,26 @@ export default function CustomerOrdersPage() {
               <h2 className="font-display font-bold text-sm text-[#5c5147] uppercase tracking-widest mb-3">
                 Past Orders
               </h2>
-              <div className="space-y-3">
-                {past.map((order) => {
-                  const isExp = expanded === order.id;
-                  return (
-                    <div
+              {past.length > 50 ? (
+                <VirtualPastList
+                  past={past}
+                  expanded={expanded}
+                  onToggle={(id) => setExpanded(expanded === id ? null : id)}
+                  onReorder={handleReorder}
+                />
+              ) : (
+                <div className="space-y-3">
+                  {past.map((order) => (
+                    <PastOrderCard
                       key={order.id}
-                      className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden card-lift animate-slide-up"
-                    >
-                      <div
-                        className="flex items-center gap-4 p-4 cursor-pointer"
-                        onClick={() => setExpanded(isExp ? null : order.id)}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
-                            <span className={clsx(
-                              'text-[10px] px-2 py-0.5 rounded-full font-bold capitalize',
-                              order.status === 'completed'
-                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                                : 'bg-red-50 text-red-500 border border-red-100'
-                            )}>
-                              {order.status}
-                            </span>
-                          </div>
-                          <div className="text-xs text-[#a39083] mt-1">
-                            {order.items.length} item{order.items.length !== 1 ? 's' : ''} ·{' '}
-                            {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0 flex items-center gap-3">
-                          <span className="font-display font-bold text-amber-600">
-                            ${order.total.toFixed(2)}
-                          </span>
-                          {isExp ? <ChevronUp size={14} className="text-[#a39083]" /> : <ChevronDown size={14} className="text-[#a39083]" />}
-                        </div>
-                      </div>
-
-                      {isExp && (
-                        <div className="border-t border-[#ece6dc] px-4 pb-4 animate-fade-in">
-                          <div className="mt-4 space-y-2.5">
-                            {order.items.map((item) => (
-                              <div key={item.id} className="flex items-start justify-between gap-2">
-                                <div>
-                                  <div className="text-[#1c1714] text-sm font-medium">
-                                    {item.quantity}× {item.menuItemName}
-                                  </div>
-                                  {item.selectedModifiers.length > 0 && (
-                                    <div className="text-[11px] text-[#a39083] mt-0.5">
-                                      {item.selectedModifiers.map((m) => m.name).join(' · ')}
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="text-[#5c5147] text-sm flex-shrink-0">
-                                  ${item.totalPrice.toFixed(2)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="mt-4 pt-3 border-t border-[#ece6dc] space-y-1 text-xs text-[#a39083]">
-                            <div className="flex justify-between"><span>Subtotal</span><span>${order.subtotal.toFixed(2)}</span></div>
-                            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>${order.deliveryFee.toFixed(2)}</span></div>}
-                            {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service charge</span><span>${order.serviceCharge.toFixed(2)}</span></div>}
-                            <div className="flex justify-between font-display font-bold text-[#1c1714] text-sm pt-1 border-t border-[#ece6dc]">
-                              <span>Total</span><span>${order.total.toFixed(2)}</span>
-                            </div>
-                          </div>
-
-                          {order.status === 'completed' && (
-                            <button
-                              onClick={() => handleReorder(order)}
-                              className="btn-press mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-semibold border border-amber-200 transition-colors"
-                            >
-                              <RotateCcw size={14} /> Reorder
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      order={order}
+                      isExp={expanded === order.id}
+                      onToggle={() => setExpanded(expanded === order.id ? null : order.id)}
+                      onReorder={handleReorder}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

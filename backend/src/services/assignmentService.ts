@@ -20,17 +20,45 @@ import { applyStatusChange } from './orderLifecycle';
 //  Runs fire-and-forget — kitchen does not await it.
 
 export async function assignDriver(orderId: string): Promise<void> {
-  const driver = await prisma.staff.findFirst({
-    where: {
-      role:               'delivery',
-      isActive:           true,
-      driverStatus:       'AVAILABLE',
-      verificationStatus: 'VERIFIED',
-    },
-    orderBy: { activeOrderCount: 'asc' },
+  // Use interactive transaction to prevent race condition:
+  // two concurrent calls could otherwise pick the same driver.
+  const result = await prisma.$transaction(async (tx) => {
+    const driver = await tx.staff.findFirst({
+      where: {
+        role:               'delivery',
+        isActive:           true,
+        driverStatus:       'AVAILABLE',
+        verificationStatus: 'VERIFIED',
+      },
+      orderBy: { activeOrderCount: 'asc' },
+    });
+
+    if (!driver) return null;
+
+    // applyStatusChange validates + writes to DB + fires SSE/WhatsApp
+    await applyStatusChange(orderId, 'assigned', 'system', { driverId: driver.id });
+
+    // Increment counts inside the same transaction
+    await tx.staff.update({
+      where: { id: driver.id },
+      data:  {
+        driverStatus:     'ON_DELIVERY',
+        activeOrderCount: { increment: 1 },
+      },
+    });
+
+    const order = await tx.order.findUnique({
+      where:   { id: orderId },
+      include: {
+        items:    { select: { menuItemName: true, quantity: true } },
+        customer: { select: { name: true } },
+      },
+    });
+
+    return { driver, order };
   });
 
-  if (!driver) {
+  if (!result) {
     sseManager.broadcastToAdmin('NO_DRIVER_AVAILABLE', {
       orderId,
       message: 'No available driver. Please assign manually.',
@@ -38,26 +66,9 @@ export async function assignDriver(orderId: string): Promise<void> {
     return;
   }
 
-  // applyStatusChange writes the DB update, fires SSE to specific driver, fires WhatsApp
-  await applyStatusChange(orderId, 'assigned', 'system', { driverId: driver.id });
+  const { driver, order } = result;
 
-  // Increment counts AFTER successful assignment
-  await prisma.staff.update({
-    where: { id: driver.id },
-    data:  {
-      driverStatus:     'ON_DELIVERY',
-      activeOrderCount: { increment: 1 },
-    },
-  });
-
-  const order = await prisma.order.findUnique({
-    where:   { id: orderId },
-    include: {
-      items:    { select: { menuItemName: true, quantity: true } },
-      customer: { select: { name: true } },
-    },
-  });
-
+  // SSE notifications OUTSIDE the transaction (non-critical, fire-and-forget)
   sseManager.sendToDriver(driver.id, 'NEW_DELIVERY_ASSIGNED', {
     orderId,
     orderNumber:     order?.orderNumber,

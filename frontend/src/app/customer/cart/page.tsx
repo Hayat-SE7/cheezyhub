@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
-import { orderApi } from '@/lib/api';
+import { orderApi, addressApi } from '@/lib/api';
 import Image from 'next/image';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
@@ -16,6 +16,20 @@ export default function CartPage() {
   const { isAuthenticated } = useAuthStore();
   const [placing, setPlacing] = useState(false);
   const [note,    setNote]    = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+
+  // Fetch their default address on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      addressApi.getAll().then(res => {
+        const addrs = res.data.data;
+        if (addrs && addrs.length > 0) {
+          const def = addrs.find((a: any) => a.isDefault) || addrs[0];
+          setDeliveryAddress(def.addressText || '');
+        }
+      }).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   const subtotal     = items.reduce((s, i) => s + i.totalPrice, 0);
   const deliveryFee  = subtotal >= 1500 ? 0 : 150;
@@ -24,6 +38,10 @@ export default function CartPage() {
   const handlePlaceOrder = async () => {
     if (!isAuthenticated) { router.push('/customer/login'); return; }
     if (!items.length) { toast.error('Cart is empty'); return; }
+    if (deliveryAddress.trim().length < 5) {
+      toast.error('Please provide a full delivery address');
+      return;
+    }
     setPlacing(true);
     try {
       const res = await orderApi.create({
@@ -31,9 +49,10 @@ export default function CartPage() {
           menuItemId:          i.menuItemId,
           quantity:            i.quantity,
           selectedModifierIds: i.selectedModifiers.map((m) => m.id),
-          notes:               note || undefined,
+          notes:               note || undefined, // applies to item
         })),
-        customerNote: note || undefined,
+        deliveryAddress: deliveryAddress.trim(),
+        notes: note || undefined, // overarching order note
       });
       clear();
       const orderNum = res.data.data?.orderNumber ?? '';
@@ -65,7 +84,7 @@ export default function CartPage() {
         {/* Items */}
         <div className="space-y-3">
           {items.map((item) => (
-            <div key={`${item.menuItemId}-${item.selectedModifiers.map((m) => m.id).join(',')}`} className="flex gap-4 bg-white rounded-2xl border border-[#ece6dc] p-4">
+            <div key={item.id} className="flex gap-4 bg-white rounded-2xl border border-[#ece6dc] p-4">
               {item.imageUrl ? (
                 <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
                   <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
@@ -80,17 +99,17 @@ export default function CartPage() {
                 )}
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQuantity(item.menuItemId, item.quantity - 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
+                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
                       <Minus size={12} className="text-[#5c5147]" />
                     </button>
                     <span className="font-semibold text-[#1c1714] w-7 text-center text-sm">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.menuItemId, item.quantity + 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
+                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
                       <Plus size={12} className="text-[#5c5147]" />
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-amber-600 text-sm">Rs. {item.totalPrice.toFixed(0)}</span>
-                    <button onClick={() => removeItem(item.menuItemId)} className="text-[#d5c8bc] hover:text-red-400 transition-colors">
+                    <button onClick={() => removeItem(item.id)} className="text-[#d5c8bc] hover:text-red-400 transition-colors">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -99,10 +118,25 @@ export default function CartPage() {
             </div>
           ))}
 
-          {/* Note */}
-          <div className="bg-white rounded-2xl border border-[#ece6dc] p-4">
-            <label className="block text-sm font-semibold text-[#1c1714] mb-2">Order note (optional)</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Special requests, allergies, etc." rows={2} className="w-full px-3 py-2 rounded-xl bg-[#faf9f6] border border-[#ece6dc] text-[#1c1714] text-sm placeholder-[#a39083] focus:outline-none focus:border-amber-400 resize-none" />
+          {/* Addresses and Notes */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-[#ece6dc] p-4">
+              <label className="block text-sm font-semibold text-[#1c1714] mb-2 flex items-center gap-1.5 hover:text-amber-500 transition-colors">
+                <MapPin size={15} className="text-amber-500" /> Delivery Address
+              </label>
+              <textarea 
+                value={deliveryAddress} 
+                onChange={(e) => setDeliveryAddress(e.target.value)} 
+                placeholder="Enter complete delivery address" 
+                rows={2} 
+                className="w-full px-3 py-2 rounded-xl bg-[#faf9f6] border border-[#ece6dc] text-[#1c1714] text-sm placeholder-[#a39083] focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none transition-all" 
+              />
+            </div>
+            
+            <div className="bg-white rounded-2xl border border-[#ece6dc] p-4">
+              <label className="block text-sm font-semibold text-[#1c1714] mb-2">Order note (optional)</label>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Special requests, allergies, etc." rows={2} className="w-full px-3 py-2 rounded-xl bg-[#faf9f6] border border-[#ece6dc] text-[#1c1714] text-sm placeholder-[#a39083] focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none transition-all" />
+            </div>
           </div>
         </div>
 

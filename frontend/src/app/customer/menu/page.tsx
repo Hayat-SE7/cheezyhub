@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { menuApi } from '@/lib/api';
 import MenuItemCard from '@/components/customer/MenuItemCard';
 import { clsx } from 'clsx';
@@ -14,23 +15,25 @@ interface Category {
 }
 
 export default function MenuPage() {
-  const [categories, setCategories]   = useState<Category[]>([]);
-  const [loading,    setLoading]      = useState(true);
-  const [paused,     setPaused]       = useState(false);
-  const [search,     setSearch]       = useState('');
-  const [activeId,   setActiveId]     = useState('');
+  const [paused,   setPaused]   = useState(false);
+  const [search,   setSearch]   = useState('');
+  const [activeId, setActiveId] = useState('');
   const sectionRefs = useRef<Record<string, HTMLElement>>({});
 
+  const { data: categories = [], isLoading: loading } = useQuery<Category[]>({
+    queryKey: ['menu'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const r = await menuApi.getAll();
+      const cats = r.data.data ?? r.data;
+      return Array.isArray(cats) ? cats : [];
+    },
+  });
+
+  // Set initial active category once data arrives
   useEffect(() => {
-    menuApi.getAll()
-      .then((r) => {
-        const cats = r.data.data ?? r.data;
-        setCategories(Array.isArray(cats) ? cats : []);
-        if (cats[0]) setActiveId(cats[0].id);
-      })
-      .catch(() => setCategories([]))
-      .finally(() => setLoading(false));
-  }, []);
+    if (categories.length && !activeId) setActiveId(categories[0].id);
+  }, [categories, activeId]);
 
   // IntersectionObserver: persist active category on scroll
   useEffect(() => {
@@ -54,10 +57,20 @@ export default function MenuPage() {
     setActiveId(id);
   };
 
-  const filtered = categories.map((cat) => ({
-    ...cat,
-    items: cat.items.filter((item) => !search || item.name.toLowerCase().includes(search.toLowerCase()) || item.description?.toLowerCase().includes(search.toLowerCase())),
-  })).filter((cat) => cat.items.length > 0);
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return categories
+      .map((cat) => ({
+        ...cat,
+        items: cat.items.filter(
+          (item) =>
+            !q ||
+            item.name.toLowerCase().includes(q) ||
+            item.description?.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((cat) => cat.items.length > 0);
+  }, [categories, search]);
 
   if (loading) {
     return (

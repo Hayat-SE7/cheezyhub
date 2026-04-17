@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import Cookies from 'js-cookie';
+import { createEventDebouncer } from '@/lib/sseDebounce';
 
 type EventHandler = (data: unknown) => void;
 
@@ -27,6 +28,13 @@ export function useCounterSSE({
   const esRef         = useRef<EventSource | null>(null);
   const handlersRef   = useRef<Record<string, EventHandler>>({});
   const wrappersRef   = useRef<Record<string, (e: MessageEvent) => void>>({});
+  const retryRef      = useRef(0);
+  const debouncerRef  = useRef<ReturnType<typeof createEventDebouncer> | null>(null);
+  if (!debouncerRef.current) {
+    debouncerRef.current = createEventDebouncer((event, data) => {
+      handlersRef.current[event]?.(data);
+    }, 150);
+  }
 
   handlersRef.current = {
     ...onEvent,
@@ -57,7 +65,7 @@ export function useCounterSSE({
         const wrapper = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
-            handlersRef.current[eventName]?.(data);
+            debouncerRef.current!.fire(eventName, data);
           } catch {
             console.warn(`[CounterSSE] Failed to parse event "${eventName}"`);
           }
@@ -67,15 +75,16 @@ export function useCounterSSE({
       }
     };
 
-    es.addEventListener('connected', () => console.log('[CounterSSE] ✅ Connected'));
+    es.addEventListener('connected', () => { console.log('[CounterSSE] ✅ Connected'); retryRef.current = 0; });
     registerHandlers();
-    setTimeout(registerHandlers, 0);
 
     es.onerror = () => {
-      console.warn('[CounterSSE] ⚠ Disconnected — reconnecting in 3s...');
+      const delay = Math.min(3000 * Math.pow(2, retryRef.current), 60000);
+      console.warn(`[CounterSSE] ⚠ Disconnected — reconnecting in ${delay / 1000}s...`);
       es.close();
       wrappersRef.current = {};
-      setTimeout(connect, 3000);
+      retryRef.current++;
+      setTimeout(connect, delay);
     };
   }, [enabled]);
 
@@ -84,6 +93,7 @@ export function useCounterSSE({
     return () => {
       esRef.current?.close();
       wrappersRef.current = {};
+      debouncerRef.current?.cancel();
     };
   }, [connect]);
 }

@@ -9,16 +9,18 @@ import { prisma } from '../config/db';
 import { sseManager } from './sseManager';
 import { whatsappService } from './whatsapp';
 import { AppError } from '../middleware/errorHandler';
+import { assignDriver } from './assignmentService';
 
 // ─── Legal Transitions Per Role ──────────────────────
 //
-//   pending    → preparing  (kitchen only)
+//   pending    → preparing  (kitchen or admin)
 //   pending    → cancelled  (kitchen or admin)
-//   preparing  → ready      (kitchen only)
+//   preparing  → ready      (kitchen or admin)
 //   preparing  → cancelled  (kitchen or admin)
-//   ready      → assigned   (admin only — assigns a driver)
-//   assigned   → picked_up  (delivery only)
-//   picked_up  → delivered  (delivery only)
+//   ready      → assigned   (admin or system — delivery orders only)
+//   ready      → completed  (system — counter/dine-in/takeaway auto-complete)
+//   assigned   → picked_up  (delivery or admin)
+//   picked_up  → delivered  (delivery or admin)
 //   delivered  → completed  (AUTOMATIC — system only)
 //
 // No other transitions are valid.
@@ -36,7 +38,8 @@ const TRANSITIONS: Transition[] = [
   { from: 'pending',    to: 'cancelled',  allowedRoles: ['kitchen', 'admin'] },
   { from: 'preparing',  to: 'ready',      allowedRoles: ['kitchen', 'admin'] },
   { from: 'preparing',  to: 'cancelled',  allowedRoles: ['kitchen', 'admin'] },
-  { from: 'ready',      to: 'assigned',   allowedRoles: ['admin'] },
+  { from: 'ready',      to: 'assigned',   allowedRoles: ['admin', 'system'] },
+  { from: 'ready',      to: 'completed',  allowedRoles: ['system', 'admin'] }, // counter/dine-in/takeaway auto-complete
   { from: 'assigned',   to: 'picked_up',  allowedRoles: ['delivery', 'admin'] },
   { from: 'picked_up',  to: 'delivered',  allowedRoles: ['delivery', 'admin'] },
   { from: 'delivered',  to: 'completed',  allowedRoles: ['system'] }, // AUTO ONLY
@@ -126,7 +129,24 @@ export async function applyStatusChange(
   // 6. Fire WhatsApp notifications
   await _fireWhatsApp(updated, newStatus);
 
-  // 7. Auto-complete: delivered → completed
+  // 7. Branch on 'ready' by orderType:
+  //    - delivery: kick off driver auto-assignment (fire-and-forget)
+  //    - counter/dine-in/takeaway: auto-complete immediately (no driver needed)
+  if (newStatus === 'ready') {
+    if (updated.orderType === 'delivery') {
+      assignDriver(orderId).catch((err) => {
+        console.error('[orderLifecycle] Auto-assignment failed:', err);
+        sseManager.broadcastToAdmin('ASSIGNMENT_FAILED', {
+          orderId,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      });
+    } else {
+      return applyStatusChange(orderId, 'completed', 'system');
+    }
+  }
+
+  // 8. Auto-complete: delivered → completed
   if (newStatus === 'delivered') {
     return applyStatusChange(orderId, 'completed', 'system');
   }
@@ -144,8 +164,10 @@ function _fireSSE(order: any, status: OrderStatus): void {
   // Admin sees everything
   sseManager.broadcastToAdmin('ORDER_UPDATED', payload);
 
-  // Customer sees their own order update
-  sseManager.sendToCustomer(order.customerId, 'ORDER_UPDATED', payload);
+  // Customer sees their own order update (skip for counter/dine-in with no customer)
+  if (order.customerId) {
+    sseManager.sendToCustomer(order.customerId, 'ORDER_UPDATED', payload);
+  }
 
   // Delivery panel: new assignment
   if (status === 'assigned') {

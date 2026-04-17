@@ -13,17 +13,19 @@ export async function settleCOD(
   notes:           string | undefined,
   settledBy:       string,
 ) {
-  const driver = await prisma.staff.findUnique({ where: { id: driverId } });
+  if (submittedAmount < 0) throw new Error('Amount cannot be negative');
 
-  if (!driver)                    throw new Error('Driver not found');
-  if (driver.role !== 'delivery') throw new Error('Staff is not a driver');
-  if (submittedAmount < 0)        throw new Error('Amount cannot be negative');
-  if (driver.codPending <= 0)     throw new Error('Driver has no pending COD');
+  // Interactive transaction: read + validate + write atomically to prevent double-settlement
+  const settlement = await prisma.$transaction(async (tx) => {
+    const driver = await tx.staff.findUnique({ where: { id: driverId } });
 
-  const remainingAmount = Math.max(0, driver.codPending - submittedAmount);
+    if (!driver)                    throw new Error('Driver not found');
+    if (driver.role !== 'delivery') throw new Error('Staff is not a driver');
+    if (driver.codPending <= 0)     throw new Error('Driver has no pending COD');
 
-  const [settlement] = await prisma.$transaction([
-    prisma.driverSettlement.create({
+    const remainingAmount = Math.max(0, driver.codPending - submittedAmount);
+
+    const record = await tx.driverSettlement.create({
       data: {
         driverId,
         collectedAmount: driver.codPending,
@@ -32,20 +34,23 @@ export async function settleCOD(
         notes,
         settledBy,
       },
-    }),
-    prisma.staff.update({
+    });
+
+    await tx.staff.update({
       where: { id: driverId },
       data:  { codPending: remainingAmount },
-    }),
-  ]);
+    });
+
+    return { record, remainingAmount };
+  });
 
   sseManager.sendToDriver(driverId, 'COD_SETTLED', {
     settledAmount:   submittedAmount,
-    remainingAmount,
-    message: `Settlement recorded. Remaining: Rs.${remainingAmount.toFixed(0)}`,
+    remainingAmount: settlement.remainingAmount,
+    message: `Settlement recorded. Remaining: Rs.${settlement.remainingAmount.toFixed(0)}`,
   });
 
-  return settlement;
+  return settlement.record;
 }
 
 export async function getAllSettlements(filters: {

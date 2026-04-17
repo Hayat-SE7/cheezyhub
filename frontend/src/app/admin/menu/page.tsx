@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { menuApi, kitchenApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
@@ -1074,7 +1075,7 @@ export default function AdminMenuPage() {
                         {/* Thumbnail */}
                         <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden bg-[#1a1a1e] flex items-center justify-center">
                           {item.imageUrl ? (
-                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                            <Image src={item.imageUrl} alt={item.name} width={48} height={48} className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-2xl">{ITEM_EMOJI(item.name)}</span>
                           )}

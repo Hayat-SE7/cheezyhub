@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { deliveryApi } from '@/lib/api';
 import { Wallet, ArrowDownCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Settlement { id: string; collectedAmount: number; submittedAmount: number; remainingAmount: number; notes?: string; createdAt: string; }
 interface CODOrder    { id: string; orderNumber: string; total: number; updatedAt: string; }
@@ -83,7 +84,7 @@ export default function CODWalletPage() {
       {tab === 'pending' && (
         <div className="space-y-2">
           {orders.length === 0 ? (
-            <EmptyState icon={ArrowDownCircle} message="No COD orders yet" />
+            <EmptyState icon={ArrowDownCircle} title="No COD orders yet" dark />
           ) : orders.map(o => (
             <div key={o.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
               <div>
@@ -99,7 +100,7 @@ export default function CODWalletPage() {
       {tab === 'history' && (
         <div className="space-y-2">
           {settlements.length === 0 ? (
-            <EmptyState icon={Clock} message="No settlements yet" />
+            <EmptyState icon={Clock} title="No settlements yet" dark />
           ) : settlements.map(s => (
             <div key={s.id} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -125,15 +126,6 @@ export default function CODWalletPage() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
-  return (
-    <div className="text-center py-12 text-zinc-700">
-      <Icon size={36} className="mx-auto mb-2 opacity-40" />
-      <p className="text-sm">{message}</p>
     </div>
   );
 }

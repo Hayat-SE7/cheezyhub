@@ -8,7 +8,7 @@
 //    - /api/counter/sync → network-only (never cache mutations)
 // ─────────────────────────────────────────────────────────────────
 
-const CACHE_VERSION  = 'ch-v1';
+const CACHE_VERSION  = 'ch-v2';
 const STATIC_CACHE   = `${CACHE_VERSION}-static`;
 const MENU_CACHE     = `${CACHE_VERSION}-menu`;
 const IMAGE_CACHE    = `${CACHE_VERSION}-images`;
@@ -57,9 +57,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets → cache-first
+  // Static assets → stale-while-revalidate
   if (STATIC_EXTENSIONS.test(url.pathname)) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
     return;
   }
 

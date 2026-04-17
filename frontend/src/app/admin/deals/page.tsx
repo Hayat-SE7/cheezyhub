@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import NextImage from 'next/image';
 import { dealsApi, menuApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
@@ -221,7 +222,7 @@ export default function AdminDealsPage() {
                   style={{ background: typeInfo.color + '15' }}
                 >
                   {deal.imageUrl && !deal.imageUrl.startsWith('data:') ? (
-                    <img src={deal.imageUrl} alt={deal.title} className="w-full h-full object-cover rounded-xl" />
+                    <NextImage src={deal.imageUrl} alt={deal.title} width={80} height={80} className="w-full h-full object-cover rounded-xl" />
                   ) : deal.imageUrl ? (
                     <img src={deal.imageUrl} alt={deal.title} className="w-full h-full object-cover rounded-xl" />
                   ) : (

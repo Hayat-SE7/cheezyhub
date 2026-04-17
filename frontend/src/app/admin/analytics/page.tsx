@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, ShoppingBag, DollarSign, XCircle,
   BarChart2, Download, RefreshCw, Users,
@@ -138,34 +139,40 @@ function Section({ title, icon: Icon, children, action }: {
 // ═══════════════════════════════════════════════════════
 export default function AnalyticsPage() {
   const [range, setRange]   = useState<7 | 30 | 90>(7);
-  const [data, setData]     = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [itemMode, setItemMode] = useState<'revenue' | 'quantity'>('revenue');
   const [exporting, setExporting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await analyticsApi.getDashboard(String(range));
-      setData(res.data.data);
-    } catch {
-      toast.error('Failed to load analytics');
-    } finally {
-      setLoading(false);
-    }
-  }, [range]);
-
-  useEffect(() => { load(); }, [load]);
+  const { data, isLoading: loading, refetch } = useQuery<AnalyticsData>({
+    queryKey: ['analytics', range],
+    queryFn: async () => {
+      try {
+        const res = await analyticsApi.getDashboard(String(range));
+        return res.data.data;
+      } catch (err) {
+        toast.error('Failed to load analytics');
+        throw err;
+      }
+    },
+  });
+  const load = () => { refetch(); };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      analyticsApi.exportCsv(String(range));
-      toast.success('CSV download started');
+      const res = await analyticsApi.exportCsv(String(range));
+      const url = URL.createObjectURL(res.data as Blob);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = `analytics-${range}d.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('CSV downloaded');
     } catch {
       toast.error('Export failed');
     } finally {
-      setTimeout(() => setExporting(false), 1500);
+      setExporting(false);
     }
   };
 

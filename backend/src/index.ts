@@ -21,6 +21,15 @@ import { addressRouter } from './routes/addresses';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
+// ─── Startup Validation ─────────────────────
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'] as const;
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`FATAL: Missing required env var: ${key}`);
+    process.exit(1);
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -36,6 +45,17 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use(limiter);
+
+// ─── Auth Rate Limiting (stricter for login) ─
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts. Try again later.' },
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/login-pin', authLimiter);
 
 // ─── Safepay Webhook (MUST be registered BEFORE express.json()) ──
 // Safepay sends HMAC-signed webhook payloads that need the raw Buffer

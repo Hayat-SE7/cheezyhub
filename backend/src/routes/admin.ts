@@ -13,6 +13,7 @@ import { prisma } from '../config/db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { applyStatusChange } from '../services/orderLifecycle';
 import { AppError } from '../middleware/errorHandler';
+import { toCsv, csvHeaders } from '../utils/csv';
 
 export const adminRouter = Router();
 adminRouter.use(authenticate, requireRole('admin'));
@@ -168,15 +169,34 @@ adminRouter.patch('/customers/:id', async (req: AuthenticatedRequest, res: Respo
 });
 
 adminRouter.get('/customers/:id/export', async (req: AuthenticatedRequest, res: Response) => {
-  const orders = await prisma.order.findMany({ where: { customerId: req.params.id }, include: { items: { select: { menuItemName: true, quantity: true, totalPrice: true } } }, orderBy: { createdAt: 'desc' } });
-  const header = 'Order #,Date,Items,Subtotal,Delivery Fee,Total,Status\n';
-  const rows = orders.map((o) => {
-    const items = o.items.map((i) => `${i.quantity}x ${i.menuItemName}`).join(' | ');
-    return `${o.orderNumber},${o.createdAt.toISOString().slice(0, 10)},"${items}",${o.subtotal.toFixed(2)},${o.deliveryFee.toFixed(2)},${o.total.toFixed(2)},${o.status}`;
-  }).join('\n');
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="customer-${req.params.id}.csv"`);
-  res.send(header + rows);
+  const orders = await prisma.order.findMany({
+    where:   { customerId: req.params.id },
+    include: { items: { select: { menuItemName: true, quantity: true, totalPrice: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const rows = orders.map((o) => ({
+    orderNumber: o.orderNumber,
+    date:        o.createdAt.toISOString().slice(0, 10),
+    items:       o.items.map((i) => `${i.quantity}x ${i.menuItemName}`).join(' | '),
+    subtotal:    o.subtotal.toFixed(2),
+    deliveryFee: o.deliveryFee.toFixed(2),
+    total:       o.total.toFixed(2),
+    status:      o.status,
+  }));
+
+  const csv = toCsv(rows, [
+    { key: 'orderNumber', header: 'Order #' },
+    { key: 'date',        header: 'Date' },
+    { key: 'items',       header: 'Items' },
+    { key: 'subtotal',    header: 'Subtotal' },
+    { key: 'deliveryFee', header: 'Delivery Fee' },
+    { key: 'total',       header: 'Total' },
+    { key: 'status',      header: 'Status' },
+  ]);
+
+  res.set(csvHeaders(`customer-${req.params.id}.csv`));
+  res.send(csv);
 });
 
 // ─── ORDERS ─────────────────────────────────────────────────────
@@ -198,8 +218,8 @@ adminRouter.get('/orders', async (req: AuthenticatedRequest, res: Response) => {
 adminRouter.patch('/orders/:id/assign', async (req: AuthenticatedRequest, res: Response) => {
   const { driverId } = req.body;
   if (!driverId) { res.status(400).json({ success: false, error: 'driverId required' }); return; }
-  const driver = await prisma.staff.findFirst({ where: { id: driverId, role: 'delivery', isActive: true } });
-  if (!driver) { res.status(404).json({ success: false, error: 'Driver not found' }); return; }
+  const driver = await prisma.staff.findFirst({ where: { id: driverId, role: 'delivery', isActive: true, verificationStatus: 'VERIFIED' } });
+  if (!driver) { res.status(404).json({ success: false, error: 'Driver not found or not verified' }); return; }
   try {
     res.json({ success: true, data: await applyStatusChange(req.params.id, 'assigned', 'admin', { driverId }) });
   } catch (err) {
@@ -255,21 +275,212 @@ adminRouter.get('/stats', async (_req, res: Response) => {
   res.json({ success: true, data: { totalOrders, todayOrders, activeOrders, pendingOrders: pendingCount, totalRevenue: revenue._sum.total ?? 0, openTickets, totalCustomers } });
 });
 
-adminRouter.get('/analytics', async (_req, res: Response) => {
-  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
-  const recentOrders = await prisma.order.findMany({ where: { status: 'completed', createdAt: { gte: sevenDaysAgo } }, include: { items: { select: { menuItemName: true, quantity: true, totalPrice: true } } }, orderBy: { createdAt: 'asc' } });
-  const dailyMap = new Map<string, { orders: number; revenue: number }>();
-  for (let i = 0; i < 7; i++) { const d = new Date(sevenDaysAgo); d.setDate(d.getDate() + i); dailyMap.set(d.toISOString().slice(0, 10), { orders: 0, revenue: 0 }); }
-  for (const o of recentOrders) { const k = o.createdAt.toISOString().slice(0, 10); const d = dailyMap.get(k); if (d) { d.orders++; d.revenue += o.total; } }
+adminRouter.get('/analytics', async (req: AuthenticatedRequest, res: Response) => {
+  const range = parseInt((req.query.range as string) || '7');
+
+  const now  = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - (range - 1));
+  from.setHours(0, 0, 0, 0);
+
+  // Previous period for comparison
+  const prevTo   = new Date(from);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (range - 1));
+  prevFrom.setHours(0, 0, 0, 0);
+
+  const [currentOrders, prevOrders, driverStats] = await Promise.all([
+    prisma.order.findMany({
+      where:   { createdAt: { gte: from } },
+      include: { items: { select: { menuItemName: true, quantity: true, totalPrice: true } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.order.findMany({
+      where:   { createdAt: { gte: prevFrom, lte: prevTo }, status: 'completed' },
+      select:  { total: true },
+    }),
+    prisma.staff.findMany({
+      where:  { role: 'delivery' },
+      select: {
+        id: true, username: true, fullName: true,
+        totalDeliveries: true, todayDeliveries: true,
+        codPending: true, driverStatus: true, verificationStatus: true,
+      },
+    }),
+  ]);
+
+  const completed  = currentOrders.filter((o) => o.status === 'completed');
+  const cancelled  = currentOrders.filter((o) => o.status === 'cancelled');
+  const totalRevenue = completed.reduce((s, o) => s + o.total, 0);
+  const avgOrderValue = completed.length > 0 ? totalRevenue / completed.length : 0;
+  const cancellationRate = currentOrders.length > 0
+    ? Math.round((cancelled.length / currentOrders.length) * 1000) / 10
+    : 0;
+
+  // Previous period totals for comparison
+  const prevRevenue = prevOrders.reduce((s, o) => s + o.total, 0);
+  const prevCount   = prevOrders.length;
+
+  const revenueChange = prevRevenue > 0
+    ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 1000) / 10
+    : null;
+  const ordersChange = prevCount > 0
+    ? Math.round(((completed.length - prevCount) / prevCount) * 1000) / 10
+    : null;
+
+  // ── Daily breakdown ──────────────────────────────────────────
+  const dailyMap = new Map<string, { orders: number; revenue: number; cancelled: number }>();
+  for (let i = 0; i < range; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    dailyMap.set(d.toISOString().slice(0, 10), { orders: 0, revenue: 0, cancelled: 0 });
+  }
+  for (const o of currentOrders) {
+    const key = o.createdAt.toISOString().slice(0, 10);
+    const day = dailyMap.get(key);
+    if (!day) continue;
+    if (o.status === 'completed') { day.orders++; day.revenue += o.total; }
+    if (o.status === 'cancelled') day.cancelled++;
+  }
   const daily = Array.from(dailyMap.entries()).map(([date, v]) => ({ date, ...v }));
+
+  // ── Hourly distribution ──────────────────────────────────────
   const hourMap = new Map<number, number>();
   for (let h = 0; h < 24; h++) hourMap.set(h, 0);
-  for (const o of recentOrders) { const h = new Date(o.createdAt).getHours(); hourMap.set(h, (hourMap.get(h) ?? 0) + 1); }
+  for (const o of completed) {
+    const h = new Date(o.createdAt).getHours();
+    hourMap.set(h, (hourMap.get(h) ?? 0) + 1);
+  }
   const hourly = Array.from(hourMap.entries()).map(([hour, orders]) => ({ hour, orders }));
-  const itemAgg = await prisma.orderItem.groupBy({ by: ['menuItemName'], _sum: { quantity: true, totalPrice: true }, orderBy: { _sum: { quantity: 'desc' } }, take: 8 });
-  const topItems = itemAgg.map((i) => ({ name: i.menuItemName, quantity: i._sum.quantity ?? 0, revenue: Math.round((i._sum.totalPrice ?? 0) * 100) / 100 }));
-  res.json({ success: true, data: { daily, hourly, topItems } });
+
+  // ── Top items ────────────────────────────────────────────────
+  const itemAgg = await prisma.orderItem.groupBy({
+    by:      ['menuItemName'],
+    where:   { order: { createdAt: { gte: from }, status: 'completed' } },
+    _sum:    { quantity: true, totalPrice: true },
+    orderBy: { _sum: { quantity: 'desc' } },
+    take:    8,
+  });
+  const topItems = itemAgg.map((i) => ({
+    name:     i.menuItemName,
+    quantity: i._sum.quantity ?? 0,
+    revenue:  Math.round((i._sum.totalPrice ?? 0) * 100) / 100,
+  }));
+
+  // ── Order type breakdown ─────────────────────────────────────
+  const typeMap = new Map<string, { count: number; revenue: number }>();
+  for (const o of completed) {
+    const t = o.orderType ?? 'delivery';
+    const existing = typeMap.get(t) ?? { count: 0, revenue: 0 };
+    typeMap.set(t, { count: existing.count + 1, revenue: existing.revenue + o.total });
+  }
+  const orderTypeBreakdown = Array.from(typeMap.entries()).map(([type, v]) => ({
+    type,
+    count:   v.count,
+    revenue: Math.round(v.revenue * 100) / 100,
+  }));
+
+  // ── Payment method breakdown ─────────────────────────────────
+  const pmMap = new Map<string, { count: number; revenue: number }>();
+  for (const o of completed) {
+    const m = o.paymentMethod ?? 'cash';
+    const existing = pmMap.get(m) ?? { count: 0, revenue: 0 };
+    pmMap.set(m, { count: existing.count + 1, revenue: existing.revenue + o.total });
+  }
+  const paymentMethodBreakdown = Array.from(pmMap.entries()).map(([method, v]) => ({
+    method,
+    count:   v.count,
+    revenue: Math.round(v.revenue * 100) / 100,
+  }));
+
+  // ── Driver performance ───────────────────────────────────────
+  const driverPerformance = driverStats.map((d) => ({
+    id:               d.id,
+    username:         d.username,
+    fullName:         d.fullName,
+    totalDeliveries:  d.totalDeliveries,
+    todayDeliveries:  d.todayDeliveries,
+    codPending:       d.codPending,
+    status:           d.driverStatus,
+    verified:         d.verificationStatus === 'VERIFIED',
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      range,
+      summary: {
+        totalRevenue:     Math.round(totalRevenue * 100) / 100,
+        totalOrders:      currentOrders.length,
+        completedOrders:  completed.length,
+        avgOrderValue:    Math.round(avgOrderValue * 100) / 100,
+        cancellationRate,
+      },
+      comparison: {
+        revenue:       Math.round(prevRevenue * 100) / 100,
+        orders:        prevCount,
+        revenueChange,
+        ordersChange,
+      },
+      daily,
+      hourly,
+      topItems,
+      orderTypeBreakdown,
+      paymentMethodBreakdown,
+      driverPerformance,
+    },
+  });
 });
+
+// ─── ANALYTICS CSV EXPORT ───────────────────────────────────────
+adminRouter.get('/analytics/export', async (req: AuthenticatedRequest, res: Response) => {
+  const range = Math.max(1, Math.min(parseInt((req.query.range as string) || '7'), 365));
+
+  const from = new Date();
+  from.setDate(from.getDate() - (range - 1));
+  from.setHours(0, 0, 0, 0);
+
+  const orders = await prisma.order.findMany({
+    where:   { createdAt: { gte: from } },
+    select:  { createdAt: true, status: true, total: true },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const dailyMap = new Map<string, { orders: number; revenue: number; cancelled: number }>();
+  for (let i = 0; i < range; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    dailyMap.set(d.toISOString().slice(0, 10), { orders: 0, revenue: 0, cancelled: 0 });
+  }
+  for (const o of orders) {
+    const key = o.createdAt.toISOString().slice(0, 10);
+    const day = dailyMap.get(key);
+    if (!day) continue;
+    if (o.status === 'completed') { day.orders++; day.revenue += o.total; }
+    if (o.status === 'cancelled') day.cancelled++;
+  }
+
+  const rows = Array.from(dailyMap.entries()).map(([date, v]) => ({
+    date,
+    orders:        v.orders,
+    revenue:       v.revenue.toFixed(2),
+    cancelled:     v.cancelled,
+    avgOrderValue: v.orders > 0 ? (v.revenue / v.orders).toFixed(2) : '0.00',
+  }));
+
+  const csv = toCsv(rows, [
+    { key: 'date',          header: 'Date' },
+    { key: 'orders',        header: 'Orders' },
+    { key: 'revenue',       header: 'Revenue (Rs.)' },
+    { key: 'cancelled',     header: 'Cancelled' },
+    { key: 'avgOrderValue', header: 'Avg Order Value (Rs.)' },
+  ]);
+
+  res.set(csvHeaders(`analytics-${range}d.csv`));
+  res.send(csv);
+});
+
 
 // ─── MENU CRUD ───────────────────────────────────────────────────
 

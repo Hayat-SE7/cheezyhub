@@ -90,6 +90,11 @@ counterRouter.post('/orders', async (req: AuthenticatedRequest, res: Response) =
       orderBy: { startedAt: 'desc' },
     });
 
+    if (!activeShift) {
+      res.status(400).json({ success: false, error: 'No active shift. Start a shift first.' });
+      return;
+    }
+
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
         data: {
@@ -126,7 +131,7 @@ counterRouter.post('/orders', async (req: AuthenticatedRequest, res: Response) =
         data: {
           orderId:    newOrder.id,
           cashierId,
-          shiftId:    activeShift?.id ?? null,
+          shiftId:    activeShift.id,
           amount:     total,
           method:     paymentMethod,
           cashAmount: paymentMethod === 'cash' ? total : null,
@@ -134,15 +139,15 @@ counterRouter.post('/orders', async (req: AuthenticatedRequest, res: Response) =
         },
       });
 
-      if (activeShift) {
-        await tx.shift.update({
-          where: { id: activeShift.id },
-          data: { orderCount: { increment: 1 }, totalSales: { increment: total } },
-        });
-      }
+      await tx.shift.update({
+        where: { id: activeShift.id },
+        data: { orderCount: { increment: 1 }, totalSales: { increment: total } },
+      });
 
       return newOrder;
     });
+
+    if (!order) return; // guard for TS after early return above
 
     sseManager.broadcastToKitchen('new_order', {
       orderId: order.id, orderNumber: order.orderNumber,

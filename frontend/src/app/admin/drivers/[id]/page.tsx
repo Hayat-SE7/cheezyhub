@@ -10,6 +10,8 @@ import {
   ToggleRight, FileText, ChevronRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 const DRIVER_STATUS = {
   AVAILABLE:   { dot: 'bg-lime-400', text: 'text-lime-400',  label: 'Online'     },
@@ -34,11 +36,13 @@ export default function DriverDetailPage() {
   // Verify form
   const [verifyNote, setVerifyNote]     = useState('');
   const [verifying, setVerifying]       = useState(false);
+  const [confirmVerify, setConfirmVerify] = useState<'approve' | 'reject' | null>(null);
 
   // COD settle form
   const [settleAmount, setSettleAmount] = useState('');
   const [settleNote, setSettleNote]     = useState('');
   const [settling, setSettling]         = useState(false);
+  const [confirmSettle, setConfirmSettle] = useState(false);
 
   // Manual assign form
   const [assignOrderId, setAssignOrderId] = useState('');
@@ -110,8 +114,8 @@ export default function DriverDetailPage() {
 
   if (!driver) return null;
 
-  const vs     = VERIFY_CFG[driver.verificationStatus as keyof typeof VERIFY_CFG];
-  const ds     = DRIVER_STATUS[driver.driverStatus as keyof typeof DRIVER_STATUS];
+  const vs     = VERIFY_CFG[driver.verificationStatus as keyof typeof VERIFY_CFG] ?? VERIFY_CFG.PENDING;
+  const ds     = DRIVER_STATUS[driver.driverStatus as keyof typeof DRIVER_STATUS] ?? DRIVER_STATUS.OFFLINE;
   const VIcon  = vs.icon;
 
   const docLinks = [
@@ -255,14 +259,14 @@ export default function DriverDetailPage() {
               />
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleVerify('reject')}
+                  onClick={() => setConfirmVerify('reject')}
                   disabled={verifying}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
                 >
                   Reject
                 </button>
                 <button
-                  onClick={() => handleVerify('approve')}
+                  onClick={() => setConfirmVerify('approve')}
                   disabled={verifying}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-lime-400/10 border border-lime-400/20 text-lime-400 hover:bg-lime-400/20 disabled:opacity-50 transition-colors"
                 >
@@ -304,7 +308,7 @@ export default function DriverDetailPage() {
                 className="w-full bg-[#131316] border border-[#1e1e22] rounded-xl px-3.5 py-2.5 text-sm text-[#f2f2f5] placeholder:text-[#3a3a48] outline-none focus:border-amber-500/40 transition-colors"
               />
               <button
-                onClick={handleSettle}
+                onClick={() => setConfirmSettle(true)}
                 disabled={settling || !settleAmount}
                 className="w-full py-2.5 rounded-xl bg-amber-500 text-black text-sm font-bold disabled:opacity-50 hover:bg-amber-400 transition-colors"
               >
@@ -369,7 +373,7 @@ export default function DriverDetailPage() {
       {tab === 'orders' && (
         <div className="space-y-2">
           {(driver.deliveries ?? []).length === 0 ? (
-            <EmptyState icon={Package} message="No order history" />
+            <EmptyState icon={Package} title="No order history" dark />
           ) : (driver.deliveries as any[]).map((o: any) => (
             <div key={o.id} className="flex items-center justify-between bg-[#0c0c0e] border border-[#1e1e22] rounded-xl px-4 py-3">
               <div>
@@ -391,7 +395,7 @@ export default function DriverDetailPage() {
       {tab === 'settlements' && (
         <div className="space-y-2">
           {(driver.settlements ?? []).length === 0 ? (
-            <EmptyState icon={Wallet} message="No settlements yet" />
+            <EmptyState icon={Wallet} title="No settlements yet" dark />
           ) : (driver.settlements as any[]).map((s: any) => (
             <div key={s.id} className="bg-[#0c0c0e] border border-[#1e1e22] rounded-xl px-4 py-3 space-y-1.5">
               <div className="flex justify-between items-center">
@@ -417,15 +421,31 @@ export default function DriverDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Confirm modals */}
+      <ConfirmModal
+        open={confirmVerify !== null}
+        title={confirmVerify === 'approve' ? 'Approve Driver' : 'Reject Verification'}
+        description={confirmVerify === 'approve'
+          ? `This will verify ${driver.fullName ?? driver.username} and allow them to go online.`
+          : `This will reject ${driver.fullName ?? driver.username}'s verification. They will need to resubmit documents.`}
+        confirmLabel={confirmVerify === 'approve' ? 'Approve' : 'Reject'}
+        variant={confirmVerify === 'reject' ? 'danger' : 'warning'}
+        loading={verifying}
+        onConfirm={async () => { await handleVerify(confirmVerify!); setConfirmVerify(null); }}
+        onCancel={() => setConfirmVerify(null)}
+      />
+      <ConfirmModal
+        open={confirmSettle}
+        title="Record Settlement"
+        description={`Record Rs.${settleAmount || 0} as submitted by ${driver.fullName ?? driver.username}. This cannot be undone.`}
+        confirmLabel="Record Settlement"
+        variant="warning"
+        loading={settling}
+        onConfirm={async () => { await handleSettle(); setConfirmSettle(false); }}
+        onCancel={() => setConfirmSettle(false)}
+      />
     </div>
   );
 }
 
-function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
-  return (
-    <div className="text-center py-12 text-[#3a3a48]">
-      <Icon size={36} className="mx-auto mb-2 opacity-40" />
-      <p className="text-sm">{message}</p>
-    </div>
-  );
-}

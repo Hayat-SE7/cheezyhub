@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import Cookies from 'js-cookie';
+import { createEventDebouncer } from '@/lib/sseDebounce';
 
 type EventHandler = (data: unknown) => void;
 
@@ -49,6 +50,13 @@ export function useSSE(
   handlersRef.current = onEvent;
 
   const listenerWrappersRef = useRef<Record<string, (e: MessageEvent) => void>>({});
+  const retryRef = useRef(0);
+  const debouncerRef = useRef<ReturnType<typeof createEventDebouncer> | null>(null);
+  if (!debouncerRef.current) {
+    debouncerRef.current = createEventDebouncer((event, data) => {
+      handlersRef.current[event]?.(data);
+    }, 150);
+  }
 
   const connect = useCallback(() => {
     const token = Cookies.get('ch_token');
@@ -62,6 +70,7 @@ export function useSSE(
 
     es.addEventListener('connected', () => {
       console.log('[SSE] ✅ Connected');
+      retryRef.current = 0;
     });
 
     const registerHandlers = () => {
@@ -70,7 +79,7 @@ export function useSSE(
         const wrapper = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
-            handlersRef.current[eventName]?.(data);
+            debouncerRef.current!.fire(eventName, data);
           } catch {
             console.warn(`[SSE] Failed to parse event "${eventName}"`);
           }
@@ -81,13 +90,14 @@ export function useSSE(
     };
 
     registerHandlers();
-    setTimeout(registerHandlers, 0);
 
     es.onerror = () => {
-      console.warn('[SSE] ⚠ Disconnected — reconnecting in 3s...');
+      const delay = Math.min(3000 * Math.pow(2, retryRef.current), 60000);
+      console.warn(`[SSE] ⚠ Disconnected — reconnecting in ${delay / 1000}s...`);
       es.close();
       listenerWrappersRef.current = {};
-      setTimeout(connect, 3000);
+      retryRef.current++;
+      setTimeout(connect, delay);
     };
   }, [enabled]);
 
@@ -96,6 +106,7 @@ export function useSSE(
     return () => {
       esRef.current?.close();
       listenerWrappersRef.current = {};
+      debouncerRef.current?.cancel();
     };
   }, [connect]);
 }

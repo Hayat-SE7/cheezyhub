@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminDriverApi } from '@/lib/api';
-import { useSSE } from '@/hooks/useSSE';
+import { useAdminSSE } from '@/hooks/useAdminSSE';
 import toast from 'react-hot-toast';
 import {
   Plus, Search, ChevronRight, Bike, CheckCircle2, Clock,
@@ -54,7 +54,7 @@ export default function AdminDriversPage() {
   useEffect(() => { fetch(); }, []);
 
   // Live status updates via SSE
-  useSSE('/sse/admin', {
+  useAdminSSE({
     DRIVER_STATUS_CHANGED: (d: any) => {
       setDrivers((prev) => prev.map((dr) =>
         dr.id === d.driverId ? { ...dr, driverStatus: d.status } : dr
@@ -225,8 +225,8 @@ export default function AdminDriversPage() {
             </thead>
             <tbody className="divide-y divide-[#1e1e22]">
               {filtered.map((d) => {
-                const ds = DRIVER_STATUS[d.driverStatus];
-                const vs = VERIFY_STATUS[d.verificationStatus];
+                const ds = DRIVER_STATUS[d.driverStatus] ?? DRIVER_STATUS.OFFLINE;
+                const vs = VERIFY_STATUS[d.verificationStatus] ?? VERIFY_STATUS.PENDING;
                 const VIcon = vs.icon;
                 return (
                   <tr

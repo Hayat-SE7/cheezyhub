@@ -124,6 +124,7 @@ orderRouter.post(
       const order = await prisma.order.create({
         data: {
           orderNumber: generateOrderNumber(),
+          orderType: 'delivery', // customer app only places delivery orders
           customerId: req.user!.userId,
           deliveryAddress,
           deliveryLat,

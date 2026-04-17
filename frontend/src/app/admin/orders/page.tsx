@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { adminApi }            from '@/lib/api';
 import {
   Search, ChevronLeft, ChevronRight, RefreshCw,
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import { clsx }                from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ─── Constants ──────────────────────────────────────────────────
 
@@ -40,11 +42,7 @@ const STATUS_FILTERS = [
 ];
 
 export default function AdminOrdersPage() {
-  const [orders,    setOrders]    = useState<any[]>([]);
-  const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
-  const [totalPages,setTotalPages]= useState(1);
-  const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter]       = useState('');
@@ -55,9 +53,12 @@ export default function AdminOrdersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
+
+  const { data, isLoading: loading, refetch } = useQuery({
+    queryKey: ['admin-orders', { page, debouncedSearch, statusFilter }],
+    queryFn: async () => {
       // Phase 12: "offline" is a synthetic filter, not a real status
       const params: Record<string, any> = {
         page,
@@ -67,21 +68,14 @@ export default function AdminOrdersPage() {
         ...(statusFilter === 'offline' && { offlineSync: true }),
       };
       const res = await adminApi.getOrders(params);
-      const data = res.data.data;
-      setOrders(data.items ?? []);
-      setTotal(data.total ?? 0);
-      setTotalPages(data.totalPages ?? 1);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [page, debouncedSearch, statusFilter]);
+      return res.data.data;
+    },
+  });
 
-  useEffect(() => { load(); }, [load]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
+  const orders     = data?.items ?? [];
+  const total      = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const load = () => { refetch(); };
 
   return (
     <div className="p-6 space-y-5">
@@ -140,10 +134,7 @@ export default function AdminOrdersPage() {
             <RefreshCw size={20} className="animate-spin text-amber-500" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Package size={32} className="text-[#2a2a35] mb-3" />
-            <p className="text-sm text-[#4a4a58]">No orders found</p>
-          </div>
+          <EmptyState icon={Package} title="No orders found" dark className="py-16" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

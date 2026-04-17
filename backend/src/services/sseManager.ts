@@ -18,6 +18,15 @@ class SSEManager {
   private clients: Map<string, SSEClient> = new Map();
 
   addClient(id: string, role: string, userId: string, res: Response): void {
+    // Clean up stale connections for the same user+role (e.g. browser reconnect
+    // after unclean disconnect where 'close' event never fired).
+    this.clients.forEach((existing, key) => {
+      if (existing.userId === userId && existing.role === role && key !== id) {
+        existing.res.end();
+        this.clients.delete(key);
+      }
+    });
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
