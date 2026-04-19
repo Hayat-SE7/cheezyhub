@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useDeliveryStore } from '@/store/deliveryStore';
 import { deliveryApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Bike, Delete } from 'lucide-react';
+import { MapPin, Delete } from 'lucide-react';
+import Cookies from 'js-cookie';
 
 const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
 
@@ -20,7 +21,10 @@ export default function DeliveryLoginPage() {
   const [shake, setShake]       = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace('/delivery');
+    // Only redirect if both the store AND the cookie are valid.
+    // If the cookie is missing (expired/removed) the store is stale — don't redirect.
+    const token = Cookies.get('ch_delivery_token');
+    if (isAuthenticated && token) router.replace('/delivery');
   }, [isAuthenticated]);
 
   const handlePad = (val: string) => {
@@ -59,24 +63,35 @@ export default function DeliveryLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center px-6 py-12">
+    <div className="login-bg-delivery-map min-h-screen flex items-center justify-center px-5 py-12 relative">
 
-      {/* Logo */}
-      <div className="flex flex-col items-center gap-3 mb-10">
-        <div className="w-16 h-16 rounded-2xl bg-lime-400/10 border border-lime-400/20 flex items-center justify-center">
-          <Bike size={32} className="text-lime-400" />
-        </div>
-        <div className="text-center">
-          <h1 className="text-xl font-bold text-white tracking-tight">CheezyHub</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">Driver Portal</p>
-        </div>
+      {/* Road lines overlay */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[22%] left-0 right-0 h-px bg-lime-400/[0.08]" />
+        <div className="absolute top-[55%] left-0 right-0 h-px bg-lime-400/[0.06]" />
+        <div className="absolute top-[78%] left-0 right-0 h-px bg-lime-400/[0.05]" />
+        <div className="absolute left-[20%] top-0 bottom-0 w-px bg-lime-400/[0.08]" />
+        <div className="absolute left-[65%] top-0 bottom-0 w-px bg-lime-400/[0.06]" />
+        {/* Intersection glow at center */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full bg-lime-400/[0.05] blur-3xl" />
       </div>
 
-      {/* Card */}
-      <div className="w-full max-w-xs">
+      {/* Glass card */}
+      <div className="glass-card-lime relative z-10 w-full max-w-xs rounded-3xl p-8 animate-slide-up">
 
-        {step === 'username' ? (
-          <div className="space-y-4">
+        {/* Header */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-lime-400/10 border border-lime-400/20
+                          flex items-center justify-center mb-3">
+            <MapPin size={26} className="text-lime-400" />
+          </div>
+          <h1 className="text-white font-display font-bold text-xl tracking-tight">Driver Portal</h1>
+          <p className="text-zinc-500 text-xs mt-0.5 font-mono tracking-wider">CheezyHub Delivery</p>
+        </div>
+
+        {/* Step 1 — username */}
+        {step === 'username' && (
+          <div className="space-y-4 animate-slide-up">
             <p className="text-zinc-400 text-sm text-center">Enter your driver username</p>
             <input
               type="text"
@@ -85,48 +100,52 @@ export default function DeliveryLoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) setStep('pin'); }}
               placeholder="username"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-white text-center text-lg tracking-widest placeholder:text-zinc-700 outline-none focus:border-lime-400/50 transition-colors"
+              className="w-full bg-zinc-900/60 border border-lime-400/[0.15] rounded-xl
+                         px-4 py-3.5 text-white text-center text-lg tracking-widest
+                         placeholder:text-zinc-700 outline-none
+                         focus:border-lime-400/50 focus:ring-1 focus:ring-lime-400/10 transition-all"
             />
             <button
               onClick={() => { if (username.trim()) setStep('pin'); }}
               disabled={!username.trim()}
-              className="w-full py-3.5 rounded-xl bg-lime-400 text-black font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-lime-300 transition-colors"
+              className="w-full py-3.5 rounded-xl bg-lime-400 text-black font-bold text-sm
+                         disabled:opacity-40 disabled:cursor-not-allowed hover:bg-lime-300 transition-colors"
             >
               Continue →
             </button>
           </div>
+        )}
 
-        ) : (
-          <div className="space-y-6">
-            {/* Back + username display */}
+        {/* Step 2 — numpad */}
+        {step === 'pin' && (
+          <div className="space-y-5 animate-slide-up">
+
+            {/* Back + username */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => { setStep('username'); setPin(''); }}
-                className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
+                className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors font-mono"
               >
                 ← back
               </button>
-              <span className="text-zinc-400 text-sm flex-1 text-center">{username}</span>
+              <span className="text-zinc-400 text-sm flex-1 text-center font-mono">{username}</span>
             </div>
 
             {/* PIN dots */}
-            <div
-              className={`flex justify-center gap-3 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}
-              style={shake ? { animation: 'shake 0.4s ease-in-out' } : {}}
-            >
+            <div className={`flex justify-center gap-3 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
                   className={`w-3 h-3 rounded-full border-2 transition-all duration-150 ${
                     i < pin.length
-                      ? 'bg-lime-400 border-lime-400 scale-110'
+                      ? 'bg-lime-400 border-lime-400 scale-110 shadow-[0_0_8px_rgba(163,230,53,0.7)]'
                       : 'bg-transparent border-zinc-700'
                   }`}
                 />
               ))}
             </div>
 
-            <p className="text-zinc-500 text-xs text-center">Enter your PIN</p>
+            <p className="text-zinc-500 text-xs text-center font-mono tracking-wider">Enter your PIN</p>
 
             {/* Numpad */}
             <div className="grid grid-cols-3 gap-3">
@@ -139,8 +158,8 @@ export default function DeliveryLoginPage() {
                     key === ''
                       ? 'cursor-default'
                       : key === '⌫'
-                      ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                      : 'bg-zinc-900 text-white border border-zinc-800 hover:bg-zinc-800 hover:border-lime-400/30'
+                      ? 'bg-zinc-900/50 text-zinc-500 hover:bg-zinc-800/60 hover:text-white border border-lime-400/[0.08]'
+                      : 'bg-zinc-900/50 text-white border border-lime-400/[0.10] hover:border-lime-400/30 hover:bg-zinc-800/60'
                   } ${loading ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   {key === '⌫' ? <Delete size={18} className="mx-auto" /> : key}

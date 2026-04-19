@@ -180,6 +180,10 @@ h1,h2,h3,h4,h5,h6 {
   background:linear-gradient(90deg,#1a1a1e 25%,#222229 50%,#1a1a1e 75%);
   background-size:200% auto;
 }
+.customer-theme .skeleton {
+  background:linear-gradient(90deg,#2d1e0f 25%,#3d2a15 50%,#2d1e0f 75%);
+  background-size:200% auto;
+}
 
 @keyframes pulseDot {
   0%,100% { transform:scale(1);   opacity:1; }
@@ -398,4 +402,161 @@ h1,h2,h3,h4,h5,h6 {
   pointer-events:none;
   border-radius:inherit;
   opacity:0.4;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN PAGE REDESIGNS — New keyframes & utility classes
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Customer — bottom sheet slide up */
+@keyframes sheetUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-sheet-up { animation: sheetUp 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* Kitchen — flame flicker */
+@keyframes flicker {
+  0%,100% { transform: scaleY(1)    translateX(0);   opacity: 1;    }
+  25%      { transform: scaleY(1.06) translateX(-2px); opacity: 0.9;  }
+  50%      { transform: scaleY(0.94) translateX(2px);  opacity: 1;    }
+  75%      { transform: scaleY(1.04) translateX(-1px); opacity: 0.95; }
+}
+.animate-flicker { animation: flicker 2.2s ease-in-out infinite; }
+
+/* Admin — ring rotations */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-slow    { animation: spinSlow 18s linear infinite; }
+.animate-spin-reverse { animation: spinSlow 12s linear infinite reverse; }
+
+@keyframes pulseRing {
+  0%,100% { transform: scale(1);    opacity: 0.6; }
+  50%      { transform: scale(1.08); opacity: 0.2; }
+}
+.animate-pulse-ring { animation: pulseRing 3s ease-in-out infinite; }
+
+/* ── Background classes ─────────────────────────────────────── */
+
+/* Customer hero */
+.login-bg-customer-hero {
+  background: linear-gradient(160deg, #1a0e05 0%, #2d1a08 40%, #3d2010 70%, #1a0e05 100%);
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-customer-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, rgba(251,191,36,0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 35% at 10% 80%, rgba(245,158,11,0.14) 0%, transparent 50%),
+    radial-gradient(ellipse 35% 30% at 90% 70%, rgba(234,88,12,0.12)  0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Kitchen — dark with orange radial glows (matches other staff panels) */
+.login-bg-kitchen-flame {
+  background: #060403;
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-kitchen-flame::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 40%, rgba(234,88,12,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 40% at 15% 75%, rgba(220,38,38,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 35% at 85% 20%, rgba(251,191,36,0.10) 0%, transparent 50%);
+  pointer-events: none;
+}
+.login-bg-kitchen-flame::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(234,88,12,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(234,88,12,0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+}
+
+/* Delivery map grid */
+.login-bg-delivery-map {
+  background: #060a0c;
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-delivery-map::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(163,230,53,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(163,230,53,0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+.login-bg-delivery-map::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(132,204,22,0.10) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 30% at 80% 20%, rgba(74,222,128,0.07) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Counter tech grid */
+.login-bg-counter-grid {
+  background: #050507;
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-counter-grid::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Admin exec grid */
+.login-bg-admin-exec {
+  background: #04040a;
+  position: relative;
+  overflow: hidden;
+}
+.login-bg-admin-exec::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(245,158,11,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,158,11,0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+/* ── Card classes ───────────────────────────────────────────── */
+
+.glass-card-lime {
+  background: rgba(6,12,8,0.82);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(163,230,53,0.15);
+  box-shadow: 0 24px 64px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(163,230,53,0.06) inset;
+}
+.glass-card-flame {
+  background: rgba(10,5,0,0.88);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(251,146,60,0.20);
+  box-shadow: 0 24px 64px -12px rgba(180,50,0,0.40), 0 0 0 1px rgba(251,146,60,0.08) inset;
+}
+.glass-card-exec {
+  background: rgba(6,4,12,0.92);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(245,158,11,0.12);
+  box-shadow: 0 32px 80px -16px rgba(0,0,0,0.8), 0 0 0 1px rgba(245,158,11,0.05) inset;
 }

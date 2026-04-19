@@ -24,12 +24,17 @@ async function main() {
 
   // ─── Staff Accounts ──────────────────────────────────────────
 
+  const adminHash   = await bcrypt.hash('1234', 10);
+  const cashierHash = await bcrypt.hash('000000', 10);
+  const kitchenHash = await bcrypt.hash('5678', 10);
+  const driverHash  = await bcrypt.hash('9012', 10);
+
   await prisma.staff.upsert({
     where:  { username: 'admin' },
-    update: {},
+    update: { pinHash: adminHash, isActive: true },
     create: {
       username: 'admin',
-      pinHash:  await bcrypt.hash('1234', 10),
+      pinHash:  adminHash,
       role:     'admin',
       fullName: 'Admin User',
     },
@@ -37,10 +42,10 @@ async function main() {
 
   await prisma.staff.upsert({
     where:  { username: 'cashier1' },
-    update: {},
+    update: { pinHash: cashierHash, isActive: true },
     create: {
       username: 'cashier1',
-      pinHash:  await bcrypt.hash('000000', 10),
+      pinHash:  cashierHash,
       role:     'cashier',
       fullName: 'Counter Staff',
     },
@@ -48,10 +53,10 @@ async function main() {
 
   await prisma.staff.upsert({
     where:  { username: 'kitchen1' },
-    update: {},
+    update: { pinHash: kitchenHash, isActive: true },
     create: {
       username: 'kitchen1',
-      pinHash:  await bcrypt.hash('5678', 10),
+      pinHash:  kitchenHash,
       role:     'kitchen',
       fullName: 'Kitchen Staff',
     },
@@ -60,6 +65,7 @@ async function main() {
   await prisma.staff.upsert({
     where:  { username: 'driver1' },
     update: {
+      pinHash:            driverHash,
       fullName:           'Ali Raza',
       phone:              '+923001111111',
       vehicleType:        'bike',
@@ -70,7 +76,7 @@ async function main() {
     },
     create: {
       username:           'driver1',
-      pinHash:            await bcrypt.hash('9012', 10),
+      pinHash:            driverHash,
       role:               'delivery',
       fullName:           'Ali Raza',
       phone:              '+923001111111',

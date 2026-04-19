@@ -146,8 +146,14 @@ export async function applyStatusChange(
     }
   }
 
-  // 8. Auto-complete: delivered → completed
+  // 8. Auto-complete: delivered → completed (+ increment COD wallet)
   if (newStatus === 'delivered') {
+    if (updated.paymentMethod === 'cash' && updated.driverId) {
+      await prisma.staff.update({
+        where: { id: updated.driverId },
+        data: { codPending: { increment: updated.total } },
+      });
+    }
     return applyStatusChange(orderId, 'completed', 'system');
   }
 

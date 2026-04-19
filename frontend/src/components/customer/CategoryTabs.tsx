@@ -21,8 +21,8 @@ export default function CategoryTabs({ categories, active, onChange }: CategoryT
           className={clsx(
             'flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all',
             active === cat.id
-              ? 'bg-amber-500 text-white shadow-sm'
-              : 'bg-white text-[#6b6057] border border-[#e8e3da] hover:border-amber-300'
+              ? 'bg-amber-500 text-[#1e1208] font-bold shadow-md shadow-amber-500/30'
+              : 'bg-[#3d2a15] text-[#a07850] border border-[#4a3520] hover:border-amber-500/40'
           )}
         >
           {cat.name}

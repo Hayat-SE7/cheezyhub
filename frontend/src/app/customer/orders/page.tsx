@@ -69,7 +69,7 @@ function PastOrderCard({
   onReorder: (o: Order) => void;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden card-lift animate-slide-up">
+    <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] overflow-hidden card-lift animate-slide-up">
       <div
         className="flex items-center gap-4 p-4 cursor-pointer"
         role="button"
@@ -80,17 +80,17 @@ function PastOrderCard({
       >
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
+            <span className="font-mono text-xs text-[#a07850]">{order.orderNumber}</span>
             <span className={clsx(
               'text-[10px] px-2 py-0.5 rounded-full font-bold capitalize',
               order.status === 'completed'
-                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                : 'bg-red-50 text-red-500 border border-red-100'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : 'bg-red-500/10 text-red-400 border border-red-500/20'
             )}>
               {order.status}
             </span>
           </div>
-          <div className="text-xs text-[#a39083] mt-1">
+          <div className="text-xs text-[#a07850] mt-1">
             {order.items.length} item{order.items.length !== 1 ? 's' : ''} ·{' '}
             {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
           </div>
@@ -104,40 +104,40 @@ function PastOrderCard({
       </div>
 
       {isExp && (
-        <div className="border-t border-[#ece6dc] px-4 pb-4 animate-fade-in">
+        <div className="border-t border-[#4a3520] px-4 pb-4 animate-fade-in">
           <div className="mt-4 space-y-2.5">
             {order.items.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-[#1c1714] text-sm font-medium">
+                  <div className="text-[#f5d38e] text-sm font-medium">
                     {item.quantity}× {item.menuItemName}
                   </div>
                   {item.selectedModifiers.length > 0 && (
-                    <div className="text-[11px] text-[#a39083] mt-0.5">
+                    <div className="text-[11px] text-[#a07850] mt-0.5">
                       {item.selectedModifiers.map((m) => m.name).join(' · ')}
                     </div>
                   )}
                 </div>
-                <span className="text-[#5c5147] text-sm flex-shrink-0">
-                  ${item.totalPrice.toFixed(2)}
+                <span className="text-amber-400 text-sm flex-shrink-0">
+                  Rs. {item.totalPrice.toFixed(0)}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#ece6dc] space-y-1 text-xs text-[#a39083]">
-            <div className="flex justify-between"><span>Subtotal</span><span>${order.subtotal.toFixed(2)}</span></div>
-            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>${order.deliveryFee.toFixed(2)}</span></div>}
-            {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service charge</span><span>${order.serviceCharge.toFixed(2)}</span></div>}
-            <div className="flex justify-between font-display font-bold text-[#1c1714] text-sm pt-1 border-t border-[#ece6dc]">
-              <span>Total</span><span>${order.total.toFixed(2)}</span>
+          <div className="mt-4 pt-3 border-t border-[#4a3520] space-y-1 text-xs text-[#a07850]">
+            <div className="flex justify-between"><span>Subtotal</span><span>Rs. {order.subtotal.toFixed(0)}</span></div>
+            {order.deliveryFee > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>Rs. {order.deliveryFee.toFixed(0)}</span></div>}
+            {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service charge</span><span>Rs. {order.serviceCharge.toFixed(0)}</span></div>}
+            <div className="flex justify-between font-display font-bold text-white text-sm pt-1 border-t border-[#4a3520]">
+              <span>Total</span><span className="text-amber-400">Rs. {order.total.toFixed(0)}</span>
             </div>
           </div>
 
           {order.status === 'completed' && (
             <button
               onClick={() => onReorder(order)}
-              className="btn-press mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-sm font-semibold border border-amber-200 transition-colors"
+              className="btn-press mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-semibold border border-amber-500/20 transition-colors"
             >
               <RotateCcw size={14} /> Reorder
             </button>
@@ -208,7 +208,7 @@ function VirtualPastList({
 function OrderProgressBar({ status }: { status: string }) {
   if (status === 'cancelled') {
     return (
-      <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-100 text-center text-red-500 text-sm font-semibold">
+      <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-center text-red-400 text-sm font-semibold">
         ❌ Order Cancelled
       </div>
     );
@@ -219,10 +219,10 @@ function OrderProgressBar({ status }: { status: string }) {
   return (
     <div className="mt-4">
       <div className="text-center mb-3">
-        <div className="font-display font-bold text-[#1c1714] text-sm">
+        <div className="font-display font-bold text-[#f5d38e] text-sm">
           {STATUS_LABELS[status] ?? status}
         </div>
-        <div className="text-[#a39083] text-xs mt-0.5">{STATUS_DESCS[status]}</div>
+        <div className="text-[#a07850] text-xs mt-0.5">{STATUS_DESCS[status]}</div>
       </div>
       <div className="relative flex items-center">
         {STATUS_STEPS.map((step, idx) => (
@@ -234,14 +234,14 @@ function OrderProgressBar({ status }: { status: string }) {
                   ? idx === currentIdx
                     ? 'bg-amber-500 ring-4 ring-amber-100 scale-125'
                     : 'bg-amber-400'
-                  : 'bg-[#ece6dc]'
+                  : 'bg-[#4a3520]'
               )}
             />
             {idx < STATUS_STEPS.length - 1 && (
               <div
                 className={clsx(
                   'h-0.5 flex-1 transition-all duration-700',
-                  idx < currentIdx ? 'bg-amber-400' : 'bg-[#ece6dc]'
+                  idx < currentIdx ? 'bg-amber-400' : 'bg-[#4a3520]'
                 )}
               />
             )}
@@ -320,7 +320,7 @@ export default function CustomerOrdersPage() {
 
   return (
     <div className="pt-5">
-      <h1 className="font-display font-bold text-2xl text-[#1c1714] mb-5">My Orders</h1>
+      <h1 className="font-display font-bold text-2xl text-[#f5d38e] mb-5">My Orders</h1>
 
       {loading ? (
         <div className="space-y-3">
@@ -335,7 +335,7 @@ export default function CustomerOrdersPage() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-amber-400 pulse-dot" />
-                <h2 className="font-display font-bold text-sm text-[#5c5147] uppercase tracking-widest">
+                <h2 className="font-display font-bold text-sm text-[#f5d38e] uppercase tracking-widest">
                   Live Tracking
                 </h2>
               </div>
@@ -343,16 +343,16 @@ export default function CustomerOrdersPage() {
                 {active.map((order) => (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl border border-[#ece6dc] p-5 shadow-md shadow-amber-900/5 animate-slide-up"
+                    className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] p-5 shadow-md shadow-black/20 animate-slide-up"
                   >
                     <div className="flex items-start justify-between mb-1">
                       <div>
-                        <span className="font-mono text-xs text-[#a39083]">{order.orderNumber}</span>
-                        <div className="font-display font-bold text-amber-600 text-sm mt-0.5">
-                          ${order.total.toFixed(2)}
+                        <span className="font-mono text-xs text-[#a07850]">{order.orderNumber}</span>
+                        <div className="font-display font-bold text-amber-400 text-sm mt-0.5">
+                          Rs. {order.total.toFixed(0)}
                         </div>
                       </div>
-                      <span className="text-[11px] text-[#a39083]">
+                      <span className="text-[11px] text-[#a07850]">
                         {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
                       </span>
                     </div>
@@ -366,7 +366,7 @@ export default function CustomerOrdersPage() {
           {/* Past Orders */}
           {past.length > 0 && (
             <div>
-              <h2 className="font-display font-bold text-sm text-[#5c5147] uppercase tracking-widest mb-3">
+              <h2 className="font-display font-bold text-sm text-[#f5d38e] uppercase tracking-widest mb-3">
                 Past Orders
               </h2>
               {past.length > 50 ? (

@@ -53,10 +53,10 @@ function AddressCard({ addr, onSetDefault, onDelete, onEdit }: {
 
   return (
     <div className={clsx(
-      'relative bg-white rounded-2xl border p-4 transition-all',
+      'relative bg-[#3d2a15] rounded-2xl border p-4 transition-all',
       addr.isDefault
-        ? 'border-amber-400/40 shadow-md shadow-amber-400/10'
-        : 'border-[#ece6dc] hover:border-amber-200'
+        ? 'border-amber-500/40 shadow-md shadow-amber-500/10'
+        : 'border-[#4a3520] hover:border-amber-500/30'
     )}>
       {addr.isDefault && (
         <div className="absolute -top-2 left-4 flex items-center gap-1 px-2.5 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full shadow-md shadow-amber-400/30">
@@ -73,40 +73,40 @@ function AddressCard({ addr, onSetDefault, onDelete, onEdit }: {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="font-semibold text-[#1c1714] text-sm">{addr.label}</span>
+            <span className="font-semibold text-[#f5d38e] text-sm">{addr.label}</span>
             {addr.isGps && (
               <span className="flex items-center gap-1 text-[9px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full font-bold">
                 <Navigation size={8} /> GPS
               </span>
             )}
           </div>
-          <p className="text-[#7a6d63] text-[13px] leading-relaxed">{addr.addressText}</p>
+          <p className="text-[#a07850] text-[13px] leading-relaxed">{addr.addressText}</p>
           {addr.notes && (
-            <p className="text-[#a39083] text-[11px] mt-1 italic">📝 {addr.notes}</p>
+            <p className="text-[#7a6040] text-[11px] mt-1 italic">📝 {addr.notes}</p>
           )}
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#f0ebe3]">
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#4a3520]">
         {!addr.isDefault && (
           <button
             onClick={() => onSetDefault(addr.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
           >
             <Check size={11} /> Set Default
           </button>
         )}
         <button
           onClick={() => onEdit(addr)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-[#7a6d63] bg-[#f5f0e8] hover:bg-[#ece6dc] border border-[#ece6dc] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-[#a07850] bg-[#4a3520] hover:bg-[#5a4530] border border-[#4a3520] transition-colors"
         >
           <Pencil size={11} /> Edit
         </button>
         {!addr.isDefault && (
           <button
             onClick={() => onDelete(addr.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-red-500 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors ml-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors ml-auto"
           >
             <Trash2 size={11} /> Delete
           </button>
@@ -154,24 +154,24 @@ function AddressForm({ initial, onSave, onCancel }: {
     }
   };
 
-  const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-[#ece6dc] bg-[#faf9f6] text-[#1c1714] text-sm outline-none focus:border-amber-400 transition-colors';
+  const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-[#4a3520] bg-[#2d1e0f] text-white text-sm outline-none focus:border-amber-500/50 transition-colors placeholder:text-[#7a6040]';
 
   return (
-    <div className="bg-[#faf7f2] rounded-2xl border border-[#ece6dc] p-5 animate-slide-up">
-      <h3 className="font-display font-bold text-[#1c1714] text-base mb-4">
+    <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] p-5 animate-slide-up">
+      <h3 className="font-display font-bold text-[#f5d38e] text-base mb-4">
         {initial?.id ? 'Edit Address' : 'Add New Address'}
       </h3>
 
-      {error && <div className="text-red-500 text-sm mb-3 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</div>}
+      {error && <div className="text-red-400 text-sm mb-3 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
 
       {/* Label + type row */}
       <div className="grid grid-cols-2 gap-2.5 mb-3">
         <div>
-          <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">Label</label>
+          <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">Label</label>
           <input className={inputCls} placeholder="e.g. Home, Office" value={label} onChange={(e) => setLabel(e.target.value)} />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">Type</label>
+          <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">Type</label>
           <select className={inputCls} value={type} onChange={(e) => setType(e.target.value as any)}>
             <option value="home">🏠 Home</option>
             <option value="work">💼 Work</option>
@@ -182,44 +182,44 @@ function AddressForm({ initial, onSave, onCancel }: {
 
       <div className="grid grid-cols-2 gap-2.5 mb-3">
         <div>
-          <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">House / Flat</label>
+          <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">House / Flat</label>
           <input className={inputCls} placeholder="House no." value={houseNo} onChange={(e) => setHouseNo(e.target.value)} />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">City <span className="text-red-400">*</span></label>
+          <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">City <span className="text-red-400">*</span></label>
           <input className={inputCls} placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
         </div>
       </div>
 
       <div className="mb-3">
-        <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">Street / Road <span className="text-red-400">*</span></label>
+        <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">Street / Road <span className="text-red-400">*</span></label>
         <input className={inputCls} placeholder="Street name" value={street} onChange={(e) => setStreet(e.target.value)} />
       </div>
 
       <div className="mb-3">
-        <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">Area / Sector</label>
+        <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">Area / Sector</label>
         <input className={inputCls} placeholder="Area or sector" value={area} onChange={(e) => setArea(e.target.value)} />
       </div>
 
       <div className="mb-4">
-        <label className="text-[10px] font-bold text-[#a39083] uppercase tracking-wider mb-1 block">Delivery Notes</label>
+        <label className="text-[10px] font-bold text-[#a07850] uppercase tracking-wider mb-1 block">Delivery Notes</label>
         <input className={inputCls} placeholder="Gate colour, landmark, floor..." value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
       {/* Set as default toggle */}
-      <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#ece6dc] mb-4">
-        <span className="text-sm text-[#5c5147] font-medium">Set as default address</span>
+      <div className="flex items-center justify-between p-3 rounded-xl bg-[#2d1e0f] border border-[#4a3520] mb-4">
+        <span className="text-sm text-[#a07850] font-medium">Set as default address</span>
         <button
           type="button"
           onClick={() => setDefault(!isDefault)}
           className={`relative w-10 h-5 rounded-full transition-colors ${isDefault ? 'bg-amber-500' : 'bg-[#e0dbd4]'}`}
         >
-          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${isDefault ? 'left-5' : 'left-0.5'}`} />
+          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-[#f5d38e] shadow transition-all ${isDefault ? 'left-5' : 'left-0.5'}`} />
         </button>
       </div>
 
       <div className="flex gap-2.5">
-        <button onClick={onCancel} className="px-4 py-2.5 rounded-xl border border-[#ece6dc] text-[#7a6d63] text-sm font-semibold hover:bg-[#f5f0e8] transition-colors">
+        <button onClick={onCancel} className="px-4 py-2.5 rounded-xl border border-[#4a3520] text-[#a07850] text-sm font-semibold hover:bg-[#4a3520] transition-colors">
           Cancel
         </button>
         <button
@@ -289,8 +289,8 @@ export default function ProfilePage() {
     return (
       <div className="pt-16 text-center animate-slide-up">
         <div className="w-20 h-20 rounded-3xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-5 text-4xl">👤</div>
-        <h2 className="font-display font-bold text-2xl text-[#1c1714] mb-2">Sign in to continue</h2>
-        <p className="text-[#a39083] text-sm mb-6">Manage your profile and delivery addresses</p>
+        <h2 className="font-display font-bold text-2xl text-[#f5d38e] mb-2">Sign in to continue</h2>
+        <p className="text-[#a07850] text-sm mb-6">Manage your profile and delivery addresses</p>
         <Link href="/customer/login" className="inline-flex items-center px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-display font-bold text-sm transition-colors shadow-md shadow-amber-400/30">
           Sign In
         </Link>
@@ -302,39 +302,39 @@ export default function ProfilePage() {
     <div className="pt-5 pb-4 stagger-children">
 
       {/* ── Avatar card ──────────────────────────────── */}
-      <div className="bg-white rounded-3xl border border-[#ece6dc] p-6 mb-4 text-center animate-slide-up overflow-hidden relative">
+      <div className="bg-[#1e1208] rounded-3xl border border-[#3d2a15] p-6 mb-4 text-center animate-slide-up overflow-hidden relative">
         {/* Subtle gradient bg */}
         <div className="absolute inset-0 bg-gradient-to-br from-amber-50/60 to-transparent pointer-events-none" />
         <div className="relative">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg shadow-amber-400/30">
             🧀
           </div>
-          <h2 className="font-display font-bold text-2xl text-[#1c1714]">{user?.name ?? 'Customer'}</h2>
-          <p className="text-[#a39083] text-sm mt-1 font-ui">CheezyHub Member</p>
+          <h2 className="font-display font-bold text-2xl text-[#f5d38e]">{user?.name ?? 'Customer'}</h2>
+          <p className="text-[#a07850] text-sm mt-1 font-ui">CheezyHub Member</p>
         </div>
       </div>
 
       {/* ── Contact info ─────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden mb-4 animate-slide-up">
+      <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] overflow-hidden mb-4 animate-slide-up">
         {user?.mobile && (
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#f0ebe3]">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#4a3520]">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
               <Phone size={14} className="text-amber-500" />
             </div>
             <div>
-              <div className="text-[10px] text-[#a39083] font-bold uppercase tracking-wider">Mobile</div>
-              <div className="text-[#1c1714] text-sm font-medium">{user.mobile}</div>
+              <div className="text-[10px] text-[#a07850] font-bold uppercase tracking-wider">Mobile</div>
+              <div className="text-white text-sm font-medium">{user.mobile}</div>
             </div>
           </div>
         )}
         {user?.email && (
           <div className="flex items-center gap-3 px-5 py-4">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
               <Mail size={14} className="text-amber-500" />
             </div>
             <div>
-              <div className="text-[10px] text-[#a39083] font-bold uppercase tracking-wider">Email</div>
-              <div className="text-[#1c1714] text-sm font-medium">{user.email}</div>
+              <div className="text-[10px] text-[#a07850] font-bold uppercase tracking-wider">Email</div>
+              <div className="text-white text-sm font-medium">{user.email}</div>
             </div>
           </div>
         )}
@@ -345,9 +345,9 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <MapPin size={16} className="text-amber-500" />
-            <h3 className="font-display font-bold text-[#1c1714] text-base">My Addresses</h3>
+            <h3 className="font-display font-bold text-[#f5d38e] text-base">My Addresses</h3>
             {addresses.length > 0 && (
-              <span className="text-[11px] text-[#a39083] bg-[#f5f0e8] px-2 py-0.5 rounded-full font-semibold">{addresses.length}</span>
+              <span className="text-[11px] text-[#a07850] bg-[#3d2a15] px-2 py-0.5 rounded-full font-semibold">{addresses.length}</span>
             )}
           </div>
           {!showAddForm && !editingAddr && (
@@ -379,10 +379,10 @@ export default function ProfilePage() {
 
         {/* Empty state */}
         {!loadingAddr && addresses.length === 0 && !showAddForm && (
-          <div className="bg-white rounded-2xl border border-dashed border-[#ddd6cc] p-8 text-center">
+          <div className="bg-[#2d1e0f] rounded-2xl border border-dashed border-[#4a3520] p-8 text-center">
             <div className="text-3xl mb-3">📍</div>
-            <p className="font-semibold text-[#5c5147] text-sm mb-1">No saved addresses yet</p>
-            <p className="text-[#a39083] text-xs mb-4">Add one for faster checkout</p>
+            <p className="font-semibold text-[#a07850] text-sm mb-1">No saved addresses yet</p>
+            <p className="text-[#7a6040] text-xs mb-4">Add one for faster checkout</p>
             <button
               onClick={() => setShowAddForm(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm shadow-md shadow-amber-400/25"
@@ -418,7 +418,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Quick links ───────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#ece6dc] overflow-hidden mb-5 animate-slide-up">
+      <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] overflow-hidden mb-5 animate-slide-up">
         {[
           { href: '/customer/orders',  label: 'Order History', sub: 'View past orders' },
           { href: '/customer/support', label: 'Support Tickets', sub: 'Get help fast' },
@@ -427,15 +427,15 @@ export default function ProfilePage() {
             key={item.href}
             href={item.href}
             className={clsx(
-              'flex items-center justify-between px-5 py-4 hover:bg-[#faf9f6] transition-colors',
-              i === 0 && 'border-b border-[#f0ebe3]'
+              'flex items-center justify-between px-5 py-4 hover:bg-[#4a3520] transition-colors',
+              i === 0 && 'border-b border-[#4a3520]'
             )}
           >
             <div>
-              <div className="text-[#1c1714] font-medium text-sm">{item.label}</div>
-              <div className="text-[#a39083] text-[11px]">{item.sub}</div>
+              <div className="text-[#f5d38e] font-medium text-sm">{item.label}</div>
+              <div className="text-[#a07850] text-[11px]">{item.sub}</div>
             </div>
-            <ChevronRight size={15} className="text-[#c4b8ac]" />
+            <ChevronRight size={15} className="text-[#a07850]" />
           </Link>
         ))}
       </div>
@@ -443,7 +443,7 @@ export default function ProfilePage() {
       {/* ── Logout ───────────────────────────────────── */}
       <button
         onClick={handleLogout}
-        className="btn-press w-full flex items-center justify-center gap-2 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-display font-bold text-sm border border-red-200 transition-colors animate-slide-up"
+        className="btn-press w-full flex items-center justify-center gap-2 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-2xl font-display font-bold text-sm border border-red-500/20 transition-colors animate-slide-up"
       >
         <LogOut size={16} /> Sign Out
       </button>

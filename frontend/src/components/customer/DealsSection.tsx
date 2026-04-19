@@ -7,7 +7,17 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { motion } from 'framer-motion';
-import { Tag, Clock, Star, Zap, Gift, Package } from 'lucide-react';
+import { Tag, Clock, Star, Zap, Gift, Package, ShoppingCart } from 'lucide-react';
+
+interface LinkedItem {
+  id:             string;
+  name:           string;
+  description?:   string;
+  basePrice:      number;
+  imageUrl?:      string;
+  isAvailable:    boolean;
+  modifierGroups: any[];
+}
 
 // ── Local Deal interface (mirrors Prisma model fields used here) ──
 export interface Deal {
@@ -20,6 +30,7 @@ export interface Deal {
   discountValue:   number;
   displayLocation?: string;
   validTo?:        string | Date | null;
+  linkedItems?:    LinkedItem[];
 }
 
 type KnownDealType = 'combo' | 'discount' | 'promotion' | 'featured';
@@ -32,10 +43,10 @@ const DEAL_ICONS: Record<KnownDealType, React.ElementType> = {
 };
 
 const DEAL_COLORS: Record<KnownDealType, { bg: string; accent: string; text: string; border: string }> = {
-  combo:     { bg: '#eff6ff', accent: '#3b82f6', text: '#1d4ed8', border: '#bfdbfe' },
-  discount:  { bg: '#fef2f2', accent: '#ef4444', text: '#dc2626', border: '#fecaca' },
-  promotion: { bg: '#faf5ff', accent: '#8b5cf6', text: '#7c3aed', border: '#ddd6fe' },
-  featured:  { bg: '#fffbeb', accent: '#f59e0b', text: '#d97706', border: '#fde68a' },
+  combo:     { bg: '#1a2535', accent: '#3b82f6', text: '#93c5fd', border: '#3b82f6' },
+  discount:  { bg: '#2a1515', accent: '#ef4444', text: '#fca5a5', border: '#ef4444' },
+  promotion: { bg: '#1f1535', accent: '#8b5cf6', text: '#c4b5fd', border: '#8b5cf6' },
+  featured:  { bg: '#2d1e0f', accent: '#f59e0b', text: '#fcd34d', border: '#f59e0b' },
 };
 
 const EMOJI_BG: Record<string, string> = {
@@ -49,9 +60,10 @@ const FALLBACK_COLOR = DEAL_COLORS.featured;
 
 interface DealsSectionProps {
   deals: Deal[];
+  onSelectDeal?: (deal: Deal) => void;
 }
 
-export default function DealsSection({ deals }: DealsSectionProps) {
+export default function DealsSection({ deals, onSelectDeal }: DealsSectionProps) {
   if (!deals || deals.length === 0) return null;
 
   return (
@@ -59,9 +71,9 @@ export default function DealsSection({ deals }: DealsSectionProps) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Gift size={16} className="text-amber-500" />
-          <h2 className="font-display font-bold text-[#1c1714] text-base">Deals & Offers</h2>
+          <h2 className="font-display font-bold text-[#f5d38e] text-base">Deals & Offers</h2>
         </div>
-        <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+        <span className="text-[11px] text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
           {deals.length} active
         </span>
       </div>
@@ -94,8 +106,9 @@ export default function DealsSection({ deals }: DealsSectionProps) {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.08 }}
-              className="flex-shrink-0 w-52 rounded-2xl overflow-hidden border shadow-sm"
-              style={{ background: colors.bg, borderColor: colors.border }}
+              onClick={() => onSelectDeal?.(deal)}
+              className="flex-shrink-0 w-52 rounded-2xl overflow-hidden border-l-4 border border-transparent shadow-sm cursor-pointer hover:scale-[1.02] transition-transform"
+              style={{ background: colors.bg, borderLeftColor: colors.accent, borderColor: `${colors.accent}30` }}
             >
               {/* Image / Emoji header */}
               <div
@@ -134,17 +147,27 @@ export default function DealsSection({ deals }: DealsSectionProps) {
                     {deal.dealType}
                   </span>
                 </div>
-                <h3 className="font-display font-bold text-[#1c1714] text-sm leading-tight line-clamp-2">
+                <h3 className="font-display font-bold text-white text-sm leading-tight line-clamp-2">
                   {deal.title}
                 </h3>
                 {deal.description && (
-                  <p className="text-[11px] text-[#a39083] mt-1 line-clamp-1">{deal.description}</p>
+                  <p className="text-[11px] text-[#a07850] mt-1 line-clamp-1">{deal.description}</p>
                 )}
 
                 {timeLeft !== null && timeLeft <= 3 && (
                   <div className="flex items-center gap-1 mt-2 text-[10px] text-red-500 font-semibold">
                     <Clock size={9} />
                     {timeLeft <= 0 ? 'Ends today!' : `${timeLeft}d left`}
+                  </div>
+                )}
+
+                {deal.linkedItems && deal.linkedItems.length > 0 && (
+                  <div
+                    className="mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors"
+                    style={{ background: colors.accent }}
+                  >
+                    <ShoppingCart size={10} />
+                    Order Now
                   </div>
                 )}
               </div>

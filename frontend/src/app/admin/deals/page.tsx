@@ -125,7 +125,8 @@ export default function AdminDealsPage() {
     const payload = {
       ...form,
       discountValue: Number(form.discountValue),
-      validTo: form.validTo || null,
+      validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : undefined,
+      validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
     };
     try {
       if (editing) {

@@ -70,175 +70,188 @@ export default function CounterLoginPage() {
   const KEYS = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
 
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center p-4 overflow-hidden relative">
+    <div className="login-bg-counter-grid dark-ui h-screen flex lg:flex-row overflow-hidden">
 
-      {/* Ambient glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-amber-500/5 blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-orange-600/5 blur-[100px]" />
+      {/* ── LEFT COLUMN — desktop branding + step indicator ── */}
+      <div className="hidden lg:flex lg:w-[38%] flex-col items-center justify-center p-12 border-r border-white/[0.04] relative">
+
+        {/* Amber ambient glow */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-amber-500/5 blur-[80px] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Brand */}
+          <div className="flex flex-col items-center mb-12">
+            <div className="relative inline-block mb-4">
+              <div className="absolute inset-0 rounded-xl bg-amber-400/20 blur-lg scale-150" />
+              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-2xl shadow-xl shadow-amber-500/25">
+                🧀
+              </div>
+            </div>
+            <div className="text-white font-black text-2xl tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
+              CheezyHub
+            </div>
+            <div className="text-[#3a3a48] font-mono text-[11px] tracking-[0.25em] uppercase mt-1.5">
+              Counter Terminal
+            </div>
+          </div>
+
+          {/* Vertical step indicator */}
+          <div className="flex flex-col gap-0">
+            {/* Step 1 */}
+            <div className="flex items-start gap-4">
+              <div className="flex flex-col items-center">
+                <div className={clsx(
+                  'w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black transition-all duration-300',
+                  step === 'username' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/40' : 'bg-amber-500/20 text-amber-500'
+                )}>1</div>
+                <div className={clsx('w-px h-10 transition-all duration-500 mt-1', step === 'pin' ? 'bg-amber-500/30' : 'bg-[#1a1a22]')} />
+              </div>
+              <div className="pt-1.5">
+                <p className={clsx('text-sm font-bold transition-colors', step === 'username' ? 'text-white' : 'text-[#3a3a48]')}>
+                  Identify
+                </p>
+                <p className="text-[11px] text-[#2a2a32] font-mono mt-0.5">Enter staff username</p>
+              </div>
+            </div>
+            {/* Step 2 */}
+            <div className="flex items-start gap-4">
+              <div className={clsx(
+                'w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black transition-all duration-300 flex-shrink-0',
+                step === 'pin' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/40' : 'bg-[#111118] text-[#2a2a35] border border-[#1a1a22]'
+              )}>2</div>
+              <div className="pt-1.5">
+                <p className={clsx('text-sm font-bold transition-colors', step === 'pin' ? 'text-white' : 'text-[#3a3a48]')}>
+                  Authenticate
+                </p>
+                <p className="text-[11px] text-[#2a2a32] font-mono mt-0.5">Enter your PIN</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[#1e1e28] font-mono text-[10px] tracking-widest uppercase mt-12">
+            Authorized Staff Only
+          </p>
+        </div>
       </div>
 
-      {/* Subtle grid texture */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.03]"
-        style={{
-          backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
+      {/* ── RIGHT COLUMN — form area ── */}
+      <div className="flex-1 h-full flex items-center justify-center p-6 lg:p-12 relative">
 
-      <div className="relative w-full max-w-[360px]">
-
-        {/* Brand header */}
-        <div className="text-center mb-8">
-          <div className="relative inline-block mb-5">
-            <div className="absolute inset-0 rounded-2xl bg-amber-400/20 blur-xl scale-150" />
-            <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-3xl shadow-2xl shadow-amber-500/30">
-              🧀
-            </div>
-          </div>
-          <div className="text-white font-black text-2xl tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-            CheezyHub
-          </div>
-          <div className="text-[#3a3a48] text-xs font-mono tracking-[0.2em] uppercase mt-1">
-            Point of Sale
+        {/* Mobile: step indicator (horizontal) */}
+        <div className="absolute top-6 left-0 right-0 flex justify-center lg:hidden">
+          <div className="flex items-center gap-2">
+            <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all',
+              step === 'username' ? 'bg-amber-500 text-black' : 'bg-amber-500/20 text-amber-500'
+            )}>1</div>
+            <div className={clsx('w-12 h-px transition-all', step === 'pin' ? 'bg-amber-500/40' : 'bg-[#1c1c22]')} />
+            <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all',
+              step === 'pin' ? 'bg-amber-500 text-black' : 'bg-[#1c1c22] text-[#3a3a48]'
+            )}>2</div>
           </div>
         </div>
 
-        {/* Card */}
-        <div className="bg-[#0f0f11] border border-[#1c1c22] rounded-3xl overflow-hidden shadow-2xl shadow-black/60">
+        {/* ── STEP 1: USERNAME ── */}
+        {step === 'username' && (
+          <div className={clsx('w-full max-w-xs animate-slide-up', shake && '[animation:shake_0.4s_ease]')}>
+            <h2 className="font-display font-bold text-white text-2xl mb-1">Who&apos;s clocking in?</h2>
+            <p className="text-[#3a3a48] font-mono text-xs mb-8 tracking-wide">Enter your staff username</p>
 
-          {/* Top accent line */}
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+            <input
+              autoFocus
+              className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0c] border border-[#1e1e28]
+                         text-[#f0f0f3] text-sm outline-none
+                         focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20
+                         transition-all placeholder:text-[#2a2a38] font-mono tracking-wide mb-4"
+              placeholder="e.g. cashier1"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleUsernameSubmit()}
+            />
+            <button
+              onClick={handleUsernameSubmit}
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 active:scale-[0.98]
+                         text-black rounded-xl font-black text-sm tracking-wide transition-all
+                         shadow-lg shadow-amber-500/20"
+            >
+              Continue →
+            </button>
+          </div>
+        )}
 
-          <div className="p-7">
+        {/* ── STEP 2: NUMPAD ── */}
+        {step === 'pin' && (
+          <div className="w-full max-w-[300px] animate-slide-up">
 
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
-              <div className={clsx(
-                'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-300',
-                step === 'username' ? 'bg-amber-500 text-black' : 'bg-amber-500/20 text-amber-500'
-              )}>1</div>
-              <div className={clsx(
-                'flex-1 h-px transition-all duration-500',
-                step === 'pin' ? 'bg-amber-500/40' : 'bg-[#1c1c22]'
-              )} />
-              <div className={clsx(
-                'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-300',
-                step === 'pin' ? 'bg-amber-500 text-black' : 'bg-[#1c1c22] text-[#3a3a48]'
-              )}>2</div>
+            {/* Back + username chip */}
+            <button
+              onClick={() => { setStep('username'); setPin(''); }}
+              className="flex items-center gap-1.5 text-[11px] text-[#3a3a48] hover:text-amber-500 transition-colors mb-6 font-mono"
+            >
+              ← <span className="text-[#4a4a58] bg-[#0d0d12] border border-[#1a1a22] px-2 py-0.5 rounded-md">{username}</span>
+            </button>
+
+            {/* PIN dots */}
+            <div className={clsx('flex justify-center gap-3.5 mb-7', shake && '[animation:shake_0.4s_ease]')}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={clsx(
+                    'w-3.5 h-3.5 rounded-full transition-all duration-150',
+                    i < pin.length
+                      ? 'bg-amber-400 scale-110 shadow-[0_0_10px_rgba(251,191,36,0.7)]'
+                      : 'bg-[#1e1e28] border border-[#2a2a38]'
+                  )}
+                />
+              ))}
             </div>
 
-            {/* ── STEP 1: USERNAME ── */}
-            {step === 'username' && (
-              <div className={clsx('space-y-4', shake && '[animation:shake_0.4s_ease]')}>
-                <div>
-                  <label className="block text-[10px] font-mono text-[#3a3a48] uppercase tracking-[0.15em] mb-2">
-                    Staff Username
-                  </label>
-                  <input
-                    autoFocus
-                    className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0b] border border-[#222228] text-[#f0f0f3] text-sm outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all placeholder:text-[#2a2a35] font-mono tracking-wide"
-                    placeholder="e.g. cashier1"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleUsernameSubmit()}
-                  />
-                </div>
-                <button
-                  onClick={handleUsernameSubmit}
-                  className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-black rounded-xl font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20"
-                >
-                  Continue →
-                </button>
-              </div>
-            )}
-
-            {/* ── STEP 2: PIN ── */}
-            {step === 'pin' && (
-              <div>
-                <button
-                  onClick={() => { setStep('username'); setPin(''); }}
-                  className="flex items-center gap-1.5 text-[11px] text-[#3a3a48] hover:text-amber-500 transition-colors mb-5 font-mono"
-                >
-                  ← <span className="text-[#5a5a68]">{username}</span>
-                </button>
-
-                <label className="block text-[10px] font-mono text-[#3a3a48] uppercase tracking-[0.15em] mb-4">
-                  Enter PIN
-                </label>
-
-                {/* PIN dots */}
-                <div className={clsx(
-                  'flex justify-center gap-3 mb-6',
-                  shake && '[animation:shake_0.4s_ease]'
-                )}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={clsx(
-                        'w-3 h-3 rounded-full transition-all duration-150',
-                        i < pin.length
-                          ? 'bg-amber-400 scale-110 shadow-[0_0_8px_rgba(251,191,36,0.6)]'
-                          : 'bg-[#1e1e26] border border-[#2a2a35]'
-                      )}
-                    />
-                  ))}
-                </div>
-
-                {/* Keypad */}
-                <div className="grid grid-cols-3 gap-2.5">
-                  {KEYS.map((key, i) => {
-                    if (key === '') return <div key={i} />;
-                    const isBack = key === '⌫';
-                    return (
-                      <button
-                        key={key + i}
-                        onClick={() => isBack ? backspace() : appendDigit(key)}
-                        disabled={loading}
-                        className={clsx(
-                          'h-14 rounded-xl font-bold text-lg transition-all duration-100 active:scale-90 disabled:opacity-30',
-                          isBack
-                            ? 'bg-transparent text-[#3a3a48] hover:text-red-400 hover:bg-red-500/10'
-                            : 'bg-[#161618] border border-[#222228] text-[#d0d0d8] hover:bg-[#1e1e22] hover:border-amber-500/30 hover:text-amber-400 shadow-sm'
-                        )}
-                      >
-                        {isBack ? <Delete size={18} className="mx-auto" /> : key}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {pin.length >= 4 && pin.length < 6 && (
-                  <button
-                    onClick={() => handleLogin(pin)}
-                    disabled={loading}
-                    className="w-full mt-4 py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black rounded-xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
-                  >
-                    {loading ? <><Loader2 size={15} className="animate-spin" /> Verifying...</> : 'Login'}
-                  </button>
-                )}
-
-                {loading && pin.length === 6 && (
-                  <div className="flex justify-center mt-5">
-                    <Loader2 size={18} className="animate-spin text-amber-500" />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-7 pb-5 pt-1 border-t border-[#141418]">
-            <p className="text-center text-[10px] text-[#1e1e28] font-mono tracking-wider">
-              CHEEZYHUB · COUNTER TERMINAL
+            <p className="text-center text-[10px] text-[#3a3a48] font-mono tracking-[0.2em] uppercase mb-5">
+              Enter PIN
             </p>
-          </div>
-        </div>
 
-        <p className="text-center text-[#1e1e28] text-[10px] font-mono mt-5 tracking-widest">
-          AUTHORIZED STAFF ONLY
-        </p>
+            {/* Numpad grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {KEYS.map((key, i) => {
+                if (key === '') return <div key={i} />;
+                const isBack = key === '⌫';
+                return (
+                  <button
+                    key={key + i}
+                    onClick={() => isBack ? backspace() : appendDigit(key)}
+                    disabled={loading}
+                    className={clsx(
+                      'h-16 rounded-2xl font-bold text-xl transition-all duration-100 active:scale-90 disabled:opacity-30',
+                      isBack
+                        ? 'bg-transparent text-[#3a3a48] hover:text-red-400 hover:bg-red-500/10'
+                        : 'bg-[#0d0d10] border border-[#1a1a22] text-[#d0d0d8] hover:border-amber-500/40 hover:bg-[#161620] hover:text-amber-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+                    )}
+                  >
+                    {isBack ? <Delete size={18} className="mx-auto" /> : key}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Login button when 4–5 digits */}
+            {pin.length >= 4 && pin.length < 6 && (
+              <button
+                onClick={() => handleLogin(pin)}
+                disabled={loading}
+                className="w-full mt-5 py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50
+                           text-black rounded-xl font-black text-sm tracking-wide transition-all
+                           flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+              >
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Verifying...</> : 'Login →'}
+              </button>
+            )}
+
+            {loading && pin.length === 6 && (
+              <div className="flex justify-center mt-5">
+                <Loader2 size={18} className="animate-spin text-amber-500" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <style jsx global>{`

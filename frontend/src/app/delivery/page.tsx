@@ -99,32 +99,43 @@ export default function DeliveryDashboard() {
     <div className="flex flex-col min-h-[calc(100vh-112px)]">
 
       {/* ── Map Area ──────────────────────────────────────── */}
-      <div className="relative flex-shrink-0 h-[38vh] bg-gradient-to-br from-[#0A1F1A] via-[#0D2420] to-[#060E0C] overflow-hidden">
-        {/* CSS grid overlay */}
-        <div
-          className="absolute inset-0 opacity-60"
-          style={{
-            backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(0,212,170,0.06) 30px), repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(0,212,170,0.06) 30px)',
-          }}
-        />
+      <div className="relative flex-shrink-0 h-[38vh] bg-[#060E0C] overflow-hidden">
+        {/* Google Maps iframe when active order has address */}
+        {activeOrder?.deliveryAddress ? (
+          <iframe
+            title="Delivery map"
+            className="absolute inset-0 w-full h-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            src={`https://maps.google.com/maps?q=${encodeURIComponent(activeOrder.deliveryAddress)}&output=embed&z=15`}
+          />
+        ) : (
+          /* Idle decorative background */
+          <div
+            className="absolute inset-0 opacity-60 bg-gradient-to-br from-[#0A1F1A] via-[#0D2420] to-[#060E0C]"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(0,212,170,0.06) 30px), repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(0,212,170,0.06) 30px)',
+            }}
+          />
+        )}
 
-        {/* Route line (decorative) */}
-        {activeOrder && (
-          <>
-            <div className="absolute top-[45%] left-[15%] right-[15%] h-[2px] bg-gradient-to-r from-[#00D4AA] via-[#00D4AA80] to-[#FF6B6B]" />
-            {/* Position dot */}
-            <div className="absolute top-[calc(45%-5px)] left-[15%] w-3 h-3 rounded-full bg-[#00D4AA] shadow-[0_0_12px_#00D4AA]" />
-            {/* Destination dot */}
-            <div className="absolute top-[calc(45%-5px)] right-[15%] w-3 h-3 rounded-full bg-[#FF6B6B] shadow-[0_0_12px_#FF6B6B]" />
-          </>
+        {/* Dark overlay on top of map for readability */}
+        {activeOrder?.deliveryAddress && (
+          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
         )}
 
         {/* ETA / status badge — centred */}
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {activeOrder ? (
-            <div className="bg-[#0D2420]/90 border border-[#00D4AA]/30 rounded-2xl px-6 py-3 text-center backdrop-blur-sm">
-              <div className="text-2xl font-black text-[#00D4AA] tabular">-- min</div>
-              <div className="text-xs text-[#00D4AA]/60 mt-0.5">ETA</div>
+            <div className="bg-[#0D2420]/90 border border-[#00D4AA]/30 rounded-2xl px-6 py-3 text-center backdrop-blur-sm shadow-xl">
+              <div className="text-xs text-[#00D4AA]/60 mb-0.5 uppercase tracking-widest font-mono">Navigating to</div>
+              <div className="text-sm font-bold text-white max-w-[200px] truncate">{activeOrder.deliveryAddress}</div>
+              <button
+                onClick={() => handleMaps(activeOrder.id)}
+                className="pointer-events-auto mt-2 flex items-center gap-1.5 mx-auto px-3 py-1.5 rounded-lg bg-[#00D4AA]/20 border border-[#00D4AA]/40 text-[#00D4AA] text-xs font-bold hover:bg-[#00D4AA]/30 transition-colors"
+              >
+                <Navigation size={11} /> Open in Google Maps
+              </button>
             </div>
           ) : (
             <div className="text-center">
@@ -140,7 +151,7 @@ export default function DeliveryDashboard() {
 
         {/* Online/Offline toggle — top right */}
         {!isOnDelivery && (
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 z-10">
             <button
               role="switch"
               aria-checked={isOnline}
@@ -148,7 +159,7 @@ export default function DeliveryDashboard() {
               onClick={handleToggle}
               disabled={toggling}
               className={clsx(
-                'relative w-14 h-8 rounded-full transition-all duration-300 flex-shrink-0',
+                'relative w-14 h-8 rounded-full transition-all duration-300 flex-shrink-0 shadow-lg',
                 toggling ? 'opacity-60' : '',
                 isOnline ? 'bg-[#00D4AA]' : 'bg-[#1E3830]'
               )}
@@ -163,7 +174,7 @@ export default function DeliveryDashboard() {
 
         {/* Verification warning overlay */}
         {user?.verificationStatus !== 'VERIFIED' && !isOnline && (
-          <div className="absolute bottom-3 left-3 right-3">
+          <div className="absolute bottom-3 left-3 right-3 z-10">
             <Link href="/delivery/profile">
               <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2 backdrop-blur-sm">
                 <AlertCircle size={12} />

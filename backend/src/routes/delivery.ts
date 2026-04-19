@@ -20,6 +20,7 @@ import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/a
 import { applyStatusChange } from '../services/orderLifecycle';
 import { AppError } from '../middleware/errorHandler';
 import { OrderStatus } from '@prisma/client';
+import { sseManager } from '../services/sseManager';
 
 export const deliveryRouter = Router();
 
@@ -174,6 +175,11 @@ deliveryRouter.patch('/status', async (req: AuthenticatedRequest, res: Response)
       where: { id: req.user!.userId },
       data: { driverStatus: status },
       select: { id: true, driverStatus: true },
+    });
+
+    sseManager.broadcastToAdmin('DRIVER_STATUS_CHANGED', {
+      driverId: staff.id,
+      driverStatus: staff.driverStatus,
     });
 
     res.json({ success: true, data: staff });

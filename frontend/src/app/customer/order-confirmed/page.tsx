@@ -19,23 +19,23 @@ function OrderConfirmedContent() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
       {/* Icon */}
-      <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mb-6">
-        <CheckCircle className="text-emerald-500" size={44} />
+      <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
+        <CheckCircle className="text-emerald-400" size={44} />
       </div>
 
-      <h1 className="font-display font-bold text-3xl text-[#1c1714] mb-2">Order Confirmed!</h1>
+      <h1 className="font-display font-bold text-3xl text-[#f5d38e] mb-2">Order Confirmed!</h1>
       {orderNumber && (
-        <p className="text-[#a39083] mb-1">
-          Order <span className="font-semibold text-[#1c1714]">#{orderNumber}</span>
+        <p className="text-[#a07850] mb-1">
+          Order <span className="font-semibold text-[#f5d38e]">#{orderNumber}</span>
         </p>
       )}
-      <p className="text-[#a39083] text-sm mb-8 max-w-sm">
+      <p className="text-[#a07850] text-sm mb-8 max-w-sm">
         Your order is being prepared. You'll receive updates as it progresses.
       </p>
 
       {/* Info pills */}
       <div className="flex flex-wrap justify-center gap-3 mb-8">
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-xl text-sm text-amber-700">
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm text-amber-400">
           <Clock size={14} /> Est. 25–35 min
         </div>
       </div>
@@ -50,7 +50,7 @@ function OrderConfirmedContent() {
         </Link>
         <Link
           href="/customer"
-          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#f5f0e8] hover:bg-[#ece6dc] text-[#5c5147] font-semibold transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#3d2a15] hover:bg-[#4a3520] text-[#f5d38e] font-semibold transition-colors border border-[#4a3520]"
         >
           <Home size={16} /> Home
         </Link>

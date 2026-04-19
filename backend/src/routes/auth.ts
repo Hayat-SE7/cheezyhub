@@ -77,7 +77,20 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         success: true,
         data: {
           token,
-          user: { id: staff.id, username: staff.username, role: staff.role, fullName: staff.fullName },
+          user: {
+            id:       staff.id,
+            username: staff.username,
+            role:     staff.role,
+            fullName: staff.fullName,
+            ...(staff.role === 'delivery' && {
+              verificationStatus: staff.verificationStatus,
+              driverStatus:       staff.driverStatus,
+              codPending:         staff.codPending       ?? 0,
+              activeOrderCount:   staff.activeOrderCount ?? 0,
+              todayDeliveries:    staff.todayDeliveries  ?? 0,
+              totalDeliveries:    staff.totalDeliveries  ?? 0,
+            }),
+          },
         },
       });
     }

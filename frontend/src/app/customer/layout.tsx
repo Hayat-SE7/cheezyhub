@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
 import {
   ShoppingCart, Home, ClipboardList, User, Headphones,
   Menu, X,
@@ -10,7 +11,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LocationPopup from '@/components/customer/LocationPopup';
 import Footer from '@/components/customer/Footer';
 import { brand } from '@/config/brand';
@@ -38,17 +39,36 @@ const mobileNav = [
   { href: '/customer/profile', icon: User,          label: 'Profile' },
 ];
 
+// Public routes that don't require authentication
+const PUBLIC_ROUTES = ['/customer/login'];
+
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const pathname  = usePathname();
+  const router    = useRouter();
   const itemCount = useCartStore((s) => s.itemCount());
   const { isAuthenticated, user } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isPublic = PUBLIC_ROUTES.includes(pathname);
+
   const isActive = (href: string) =>
     href === '/customer' ? pathname === href : pathname.startsWith(href);
 
+  // Guard: if store says authenticated but cookie is gone, redirect to login
+  // This breaks the stale-store 401 loop (e.g. menu/all hitting 401 repeatedly)
+  useEffect(() => {
+    if (isPublic) return;
+    const token = Cookies.get('ch_token');
+    if (!token) {
+      router.replace('/customer/login');
+    }
+  }, [pathname, isPublic]);
+
+  // Login page renders standalone — no navbar/footer
+  if (isPublic) return <>{children}</>;
+
   return (
-    <div className="min-h-screen bg-[#100C07] flex flex-col">
+    <div className="customer-theme min-h-screen bg-[#100C07] flex flex-col">
 
       {/* ── HEADER ─────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-[#1A1208] border-b border-[#3D2E12]">

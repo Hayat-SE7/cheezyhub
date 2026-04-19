@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminDriverApi } from '@/lib/api';
+import { useAdminSSE } from '@/hooks/useAdminSSE';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, Clock, AlertCircle,
@@ -57,6 +58,14 @@ export default function DriverDetailPage() {
   };
 
   useEffect(() => { if (id) fetchDriver(); }, [id]);
+
+  useAdminSSE({
+    DRIVER_STATUS_CHANGED: (data: any) => {
+      if (data.driverId === id) {
+        setDriver((prev: any) => prev ? { ...prev, driverStatus: data.driverStatus } : prev);
+      }
+    },
+  });
 
   const handleToggleActive = async () => {
     try {

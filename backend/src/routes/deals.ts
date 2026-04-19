@@ -28,7 +28,33 @@ dealsRouter.get('/', async (_req: Request, res: Response) => {
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
   });
-  res.json({ success: true, data: deals });
+
+  // Resolve linkedItemIds → full menu items with modifiers
+  const allLinkedIds = deals.flatMap((d) => (d.linkedItemIds as string[]) || []);
+  const uniqueIds = [...new Set(allLinkedIds)];
+
+  let itemsMap: Record<string, any> = {};
+  if (uniqueIds.length > 0) {
+    const items = await prisma.menuItem.findMany({
+      where: { id: { in: uniqueIds } },
+      include: {
+        modifierGroups: {
+          include: { modifiers: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+    itemsMap = Object.fromEntries(items.map((i) => [i.id, i]));
+  }
+
+  const dealsWithItems = deals.map((deal) => ({
+    ...deal,
+    linkedItems: ((deal.linkedItemIds as string[]) || [])
+      .map((id) => itemsMap[id])
+      .filter(Boolean),
+  }));
+
+  res.json({ success: true, data: dealsWithItems });
 });
 
 // ─── PUBLIC: GET /api/deals/slider ────────────────────
@@ -70,8 +96,8 @@ const dealSchema = z.object({
   discountType:    z.enum(['flat', 'percent']).default('flat'),
   discountValue:   z.number().min(0).default(0),
   linkedItemIds:   z.array(z.string()).default([]),
-  validFrom:       z.string().datetime().optional(),
-  validTo:         z.string().datetime().optional().nullable(),
+  validFrom:       z.string().optional(),
+  validTo:         z.string().optional().nullable(),
   displayLocation: z.enum(['slider', 'deals_section', 'both']).default('both'),
   isActive:        z.boolean().default(true),
   sortOrder:       z.number().int().default(0),

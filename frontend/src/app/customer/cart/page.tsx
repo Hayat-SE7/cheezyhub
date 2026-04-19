@@ -65,9 +65,9 @@ export default function CartPage() {
   if (!items.length) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
-        <ShoppingCart size={56} className="text-[#d5c8bc] mb-4" />
-        <h2 className="font-display font-bold text-2xl text-[#1c1714] mb-2">Cart is empty</h2>
-        <p className="text-[#a39083] mb-6">Add some cheesy goodness to get started!</p>
+        <ShoppingCart size={56} className="text-[#4a3520] mb-4" />
+        <h2 className="font-display font-bold text-2xl text-[#f5d38e] mb-2">Cart is empty</h2>
+        <p className="text-[#a07850] mb-6">Add some cheesy goodness to get started!</p>
         <button onClick={() => router.push('/customer/menu')} className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors">
           Browse Menu
         </button>
@@ -77,34 +77,34 @@ export default function CartPage() {
 
   return (
     <div>
-      <h1 className="font-display font-bold text-2xl text-[#1c1714] mb-6">Your Cart</h1>
+      <h1 className="font-display font-bold text-2xl text-[#f5d38e] mb-6">Your Cart</h1>
 
       {/* 2-col on desktop */}
       <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 lg:items-start space-y-6 lg:space-y-0">
         {/* Items */}
         <div className="space-y-3">
           {items.map((item) => (
-            <div key={item.id} className="flex gap-4 bg-white rounded-2xl border border-[#ece6dc] p-4">
+            <div key={item.id} className="flex gap-4 bg-[#3d2a15] rounded-2xl border border-[#4a3520] p-4">
               {item.imageUrl ? (
                 <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
                   <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
                 </div>
               ) : (
-                <div className="w-16 h-16 rounded-xl flex-shrink-0 bg-amber-50 flex items-center justify-center text-2xl">🍔</div>
+                <div className="w-16 h-16 rounded-xl flex-shrink-0 bg-[#4a3520] flex items-center justify-center text-2xl">🍔</div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[#1c1714] text-sm">{item.name}</p>
+                <p className="font-semibold text-[#f5d38e] text-sm">{item.name}</p>
                 {item.selectedModifiers.length > 0 && (
-                  <p className="text-xs text-[#a39083] mt-0.5">{item.selectedModifiers.map((m) => m.name).join(', ')}</p>
+                  <p className="text-xs text-[#a07850] mt-0.5">{item.selectedModifiers.map((m) => m.name).join(', ')}</p>
                 )}
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
-                      <Minus size={12} className="text-[#5c5147]" />
+                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg border border-[#4a3520] bg-[#4a3520] flex items-center justify-center hover:bg-[#5a4530] transition-colors">
+                      <Minus size={12} className="text-[#f5d38e]" />
                     </button>
-                    <span className="font-semibold text-[#1c1714] w-7 text-center text-sm">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg border border-[#ece6dc] bg-white flex items-center justify-center hover:bg-gray-50">
-                      <Plus size={12} className="text-[#5c5147]" />
+                    <span className="font-semibold text-white w-7 text-center text-sm">{item.quantity}</span>
+                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg border border-[#4a3520] bg-[#4a3520] flex items-center justify-center hover:bg-[#5a4530] transition-colors">
+                      <Plus size={12} className="text-[#f5d38e]" />
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -120,48 +120,48 @@ export default function CartPage() {
 
           {/* Addresses and Notes */}
           <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-[#ece6dc] p-4">
-              <label className="block text-sm font-semibold text-[#1c1714] mb-2 flex items-center gap-1.5 hover:text-amber-500 transition-colors">
+            <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] p-4">
+              <label className="block text-sm font-semibold text-[#f5d38e] mb-2 flex items-center gap-1.5">
                 <MapPin size={15} className="text-amber-500" /> Delivery Address
               </label>
-              <textarea 
-                value={deliveryAddress} 
-                onChange={(e) => setDeliveryAddress(e.target.value)} 
-                placeholder="Enter complete delivery address" 
-                rows={2} 
-                className="w-full px-3 py-2 rounded-xl bg-[#faf9f6] border border-[#ece6dc] text-[#1c1714] text-sm placeholder-[#a39083] focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none transition-all" 
+              <textarea
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="Enter complete delivery address"
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl bg-[#2d1e0f] border border-[#4a3520] text-white text-sm placeholder-[#7a6040] focus:outline-none focus:border-amber-500/50 resize-none transition-all"
               />
             </div>
-            
-            <div className="bg-white rounded-2xl border border-[#ece6dc] p-4">
-              <label className="block text-sm font-semibold text-[#1c1714] mb-2">Order note (optional)</label>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Special requests, allergies, etc." rows={2} className="w-full px-3 py-2 rounded-xl bg-[#faf9f6] border border-[#ece6dc] text-[#1c1714] text-sm placeholder-[#a39083] focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none transition-all" />
+
+            <div className="bg-[#3d2a15] rounded-2xl border border-[#4a3520] p-4">
+              <label className="block text-sm font-semibold text-[#f5d38e] mb-2">Order note (optional)</label>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Special requests, allergies, etc." rows={2} className="w-full px-3 py-2 rounded-xl bg-[#2d1e0f] border border-[#4a3520] text-white text-sm placeholder-[#7a6040] focus:outline-none focus:border-amber-500/50 resize-none transition-all" />
             </div>
           </div>
         </div>
 
         {/* Sticky summary */}
         <div className="lg:sticky lg:top-24">
-          <div className="bg-white rounded-2xl border border-[#ece6dc] p-5 space-y-4">
-            <h2 className="font-display font-bold text-lg text-[#1c1714]">Order Summary</h2>
+          <div className="bg-[#1e1208] rounded-2xl border border-[#3d2a15] p-5 space-y-4">
+            <h2 className="font-display font-bold text-lg text-[#f5d38e]">Order Summary</h2>
 
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-[#5c5147]">
+              <div className="flex justify-between text-[#a07850]">
                 <span>Subtotal</span>
-                <span>Rs. {subtotal.toFixed(0)}</span>
+                <span className="text-white">Rs. {subtotal.toFixed(0)}</span>
               </div>
-              <div className="flex justify-between text-[#5c5147]">
+              <div className="flex justify-between text-[#a07850]">
                 <span>Delivery</span>
-                <span className={deliveryFee === 0 ? 'text-emerald-600 font-semibold' : ''}>{deliveryFee === 0 ? 'Free' : `Rs. ${deliveryFee}`}</span>
+                <span className={deliveryFee === 0 ? 'text-emerald-400 font-semibold' : 'text-white'}>{deliveryFee === 0 ? 'Free' : `Rs. ${deliveryFee}`}</span>
               </div>
               {deliveryFee > 0 && subtotal < 1500 && (
-                <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+                <p className="text-xs text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
                   Add Rs. {(1500 - subtotal).toFixed(0)} more for free delivery
                 </p>
               )}
-              <div className="border-t border-[#ece6dc] pt-2 flex justify-between font-bold text-[#1c1714]">
+              <div className="border-t border-[#3d2a15] pt-2 flex justify-between font-bold text-white">
                 <span>Total</span>
-                <span>Rs. {total.toFixed(0)}</span>
+                <span className="text-amber-400">Rs. {total.toFixed(0)}</span>
               </div>
             </div>
 
@@ -173,7 +173,7 @@ export default function CartPage() {
               {placing ? 'Placing order…' : !isAuthenticated ? 'Login to Order' : `Place Order · Rs. ${total.toFixed(0)}`}
             </button>
 
-            <button onClick={clear} className="w-full text-center text-xs text-[#a39083] hover:text-red-400 transition-colors">
+            <button onClick={clear} className="w-full text-center text-xs text-[#a07850] hover:text-red-400 transition-colors">
               Clear cart
             </button>
           </div>

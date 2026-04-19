@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useKitchenStore } from '@/store/kitchenStore';
-import { LogOut, Wifi, WifiOff } from 'lucide-react';
+import { LogOut, Wifi, WifiOff, UtensilsCrossed, History, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import Cookies from 'js-cookie';
 
@@ -31,6 +32,12 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
     router.push('/kitchen/login');
   };
 
+  const navItems = [
+    { href: '/kitchen',          label: 'Queue',    icon: UtensilsCrossed },
+    { href: '/kitchen/history',  label: 'History',  icon: History },
+    { href: '/kitchen/settings', label: 'Settings', icon: Settings },
+  ];
+
   return (
     <div className="min-h-screen bg-[#060607] flex flex-col">
       <header className="flex-shrink-0 h-11 flex items-center justify-between px-5 border-b border-[#1e1e22] bg-[#0a0a0d]">
@@ -50,6 +57,29 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
           </button>
         </div>
       </header>
+
+      {/* Tab navigation */}
+      <nav className="flex-shrink-0 flex border-b border-[#1e1e22] bg-[#0a0a0d]">
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const active = href === '/kitchen' ? pathname === '/kitchen' : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={clsx(
+                'flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold border-b-2 transition-colors',
+                active
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-[#4a4a58] hover:text-[#8a8a98]'
+              )}
+            >
+              <Icon size={13} />
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
