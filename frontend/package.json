@@ -5,12 +5,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.99.0",
-    "@tanstack/react-virtual": "^3.13.23",
-    "axios": "^1.6.7",
+    "@tanstack/react-virtual": "^3.13.24",
+    "axios": "^1.15.0",
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^11.0.0",
@@ -21,19 +24,21 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
-    "recharts": "^3.8.0",
+    "recharts": "^3.8.1",
     "sharp": "^0.34.5",
     "uuid": "^9.0.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
+    "@playwright/test": "^1.59.1",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@types/uuid": "^10.0.0",
-    "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.35",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.10",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
   }
