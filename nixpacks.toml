@@ -6,3 +6,4 @@ cmds = ["cd backend && npx prisma generate && npm run build"]
 
 [start]
 cmd = "node backend/dist/index.js"
+
