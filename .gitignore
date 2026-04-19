@@ -21,6 +21,13 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 tsc_errors.log
+tsconfig.tsbuildinfo
+
+# Environment variables
+.env.production
+backend/.env
+frontend/.env.local
+frontend/.env.production
 
 # Tool internals
 .superpowers/
