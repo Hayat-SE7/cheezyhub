@@ -5,4 +5,4 @@ cmds = ["npm install"]
 cmds = ["cd backend && npx prisma generate && npm run build"]
 
 [start]
-cmd = "cd backend && npm run start"
+cmd = "node backend/dist/index.js"
