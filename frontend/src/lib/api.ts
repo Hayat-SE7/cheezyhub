@@ -141,30 +141,31 @@ export const authApi = {
 };
 
 export const menuApi = {
-  // Public
+  // Public — customer panel, no auth required
   getPublic: ()                      => api.get('/menu'),
-  // Admin + kitchen — full list
-  getAll:    ()                      => api.get('/menu/all'),
+  // Admin — full list
+  getAll:    ()                      => adminApi_http.get('/menu/all'),
   // Single item (for editing)
-  getItem:   (id: string)            => api.get(`/menu/items/${id}`),
+  getItem:   (id: string)            => adminApi_http.get(`/menu/items/${id}`),
   // Item CRUD
-  createItem: (data: any)            => api.post('/menu/items', data),
-  updateItem: (id: string, data: any)=> api.patch(`/menu/items/${id}`, data),
-  deleteItem: (id: string)           => api.delete(`/menu/items/${id}`),
+  createItem: (data: any)            => adminApi_http.post('/menu/items', data),
+  updateItem: (id: string, data: any)=> adminApi_http.patch(`/menu/items/${id}`, data),
+  deleteItem: (id: string)           => adminApi_http.delete(`/menu/items/${id}`),
   // Category CRUD
-  getCategories: ()                  => api.get('/menu/categories'),
+  getCategories: ()                  => adminApi_http.get('/menu/categories'),
   createCategory:(data: { name: string; sortOrder?: number }) =>
-    api.post('/menu/categories', data),
+    adminApi_http.post('/menu/categories', data),
   updateCategory:(id: string, data: { name?: string; sortOrder?: number }) =>
-    api.patch(`/menu/categories/${id}`, data),
-  deleteCategory:(id: string)        => api.delete(`/menu/categories/${id}`),
-  // Availability toggles (kitchen/admin)
+    adminApi_http.patch(`/menu/categories/${id}`, data),
+  deleteCategory:(id: string)        => adminApi_http.delete(`/menu/categories/${id}`),
+  // Availability toggles (admin — kitchen uses kitchenApi which has its own kitchenApi_http)
   setItemAvailability:    (id: string, isAvailable: boolean) =>
-    api.patch(`/menu/items/${id}/availability`, { isAvailable }),
+    adminApi_http.patch(`/menu/items/${id}/availability`, { isAvailable }),
   setModifierAvailability:(id: string, isAvailable: boolean) =>
-    api.patch(`/menu/modifiers/${id}/availability`, { isAvailable }),
+    adminApi_http.patch(`/menu/modifiers/${id}/availability`, { isAvailable }),
 };
 
+// TODO: backend endpoints not yet implemented
 export const modifierGroupApi = {
   getAll: () => api.get('/menu/modifier-groups'),
   create: (data: any) => api.post('/menu/modifier-groups', data),
@@ -297,7 +298,12 @@ export const adminDriverApi = {
 };
 
 export const ticketApi = {
+  // Customer-facing (uses customer auth token)
   create: (data: any) => api.post('/tickets', data),
+  getMyTickets: () => api.get('/tickets'),
+  getMyTicket: (id: string) => api.get(`/tickets/${id}`),
+  replyAsCustomer: (id: string, message: string) => api.post(`/tickets/${id}/reply`, { message }),
+  // Admin-facing (uses admin auth token)
   getAll: () => adminApi_http.get('/tickets'),
   get: (id: string) => adminApi_http.get(`/tickets/${id}`),
   reply: (id: string, message: string) => adminApi_http.post(`/tickets/${id}/reply`, { message }),
@@ -320,6 +326,11 @@ export const analyticsApi = {
   getDashboard: (range?: string) => adminApi_http.get('/admin/analytics', { params: { range } }),
   exportCsv: (range: string) => adminApi_http.get('/admin/analytics/export', { params: { range }, responseType: 'blob' }),
 };
+export const favouritesApi = {
+  getAll: () => api.get('/favourites'),
+  toggle: (menuItemId: string) => api.post('/favourites', { menuItemId }),
+};
+
 export const counterApi = {
   // Menu
   getMenu:      ()                          => counterApi_http.get('/counter/menu'),

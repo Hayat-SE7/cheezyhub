@@ -36,6 +36,24 @@ menuRouter.get('/', async (_req: Request, res: Response) => {
   res.json({ success: true, data: categories });
 });
 
+// GET /api/menu/settings/public — public restaurant settings (no auth)
+menuRouter.get('/settings/public', async (_req: Request, res: Response) => {
+  try {
+    const settings = await prisma.systemSettings.findFirst();
+    res.json({
+      success: true,
+      data: {
+        deliveryFee:      settings?.deliveryFee      ?? 50,
+        serviceCharge:    settings?.serviceCharge    ?? 0,
+        restaurantName:   settings?.restaurantName   ?? 'CheezyHub',
+        ordersAccepting:  settings?.ordersAccepting  ?? true,
+      },
+    });
+  } catch (_err) {
+    res.status(500).json({ success: false, message: 'Failed to load settings' });
+  }
+});
+
 // ═══════════════════════════════════════════════════════
 //  ADMIN / KITCHEN — Full view (includes unavailable)
 // ═══════════════════════════════════════════════════════

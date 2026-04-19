@@ -18,6 +18,7 @@ import { ticketRouter } from './routes/tickets';
 import { sseRouter } from './routes/sse';
 import { dealsRouter } from './routes/deals';
 import { addressRouter } from './routes/addresses';
+import { favouritesRouter } from './routes/favourites';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -94,6 +95,7 @@ app.use('/api/tickets',  ticketRouter);
 app.use('/api/sse',      sseRouter);
 app.use('/api/deals',    dealsRouter);
 app.use('/api/addresses', addressRouter);
+app.use('/api/favourites', favouritesRouter);
 
 // ─── Error Handling ──────────────────────────
 app.use(notFound);
