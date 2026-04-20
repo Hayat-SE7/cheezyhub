@@ -59,25 +59,40 @@ function buildMessage(type: WhatsAppEventType, payload: Record<string, any>): st
 // ─── Low-level sender (stub — swap for real provider) ─
 
 async function _sendToProvider(to: string, message: string): Promise<boolean> {
-  // ════════════════════════════════════════════════
-  //  REPLACE THIS BLOCK with your WhatsApp provider
-  //
-  //  Twilio:
-  //    const client = require('twilio')(ACCOUNT_SID, AUTH_TOKEN);
-  //    await client.messages.create({
-  //      from: 'whatsapp:+14155238886',
-  //      to: `whatsapp:${to}`,
-  //      body: message,
-  //    });
-  //
-  //  WhatsApp Cloud API (Meta):
-  //    await fetch(`https://graph.facebook.com/v18.0/${PHONE_ID}/messages`, {
-  //      method: 'POST',
-  //      headers: { Authorization: `Bearer ${TOKEN}` },
-  //      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body: message } }),
-  //    });
-  // ════════════════════════════════════════════════
+  const provider = process.env.WHATSAPP_PROVIDER ?? 'stub';
 
+  if (provider === 'meta') {
+    const token   = process.env.META_WHATSAPP_TOKEN;
+    const phoneId = process.env.META_PHONE_NUMBER_ID;
+
+    if (!token || !phoneId) {
+      console.error('[WhatsApp] META_WHATSAPP_TOKEN or META_PHONE_NUMBER_ID not set');
+      return false;
+    }
+
+    const res = await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: message },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[WhatsApp Meta] API error:', err);
+      return false;
+    }
+    return true;
+  }
+
+  // stub fallback
   console.log(`\n📱 [WhatsApp STUB] To: ${to}`);
   console.log(message.split('\n').map((l) => `   ${l}`).join('\n'), '\n');
   return true;
