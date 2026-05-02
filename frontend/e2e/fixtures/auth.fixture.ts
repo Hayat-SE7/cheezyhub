@@ -21,7 +21,7 @@ async function loginViaApi(identifier: string, pin: string, role: 'customer' | '
 }
 
 async function injectAuth(page: Page, token: string, refreshToken: string, cookiePrefix: string) {
-  const baseURL = page.context()._options?.baseURL || 'http://localhost:3000';
+  const baseURL = process.env.BASE_URL || process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
   const url = new URL(baseURL);
   await page.context().addCookies([
     { name: `${cookiePrefix}_token`, value: token, domain: url.hostname, path: '/' },
