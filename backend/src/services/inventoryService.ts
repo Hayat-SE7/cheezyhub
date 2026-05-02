@@ -45,7 +45,7 @@ export async function validateAndPriceOrder(
 
   // Load all requested items with their modifiers
   const menuItems = await prisma.menuItem.findMany({
-    where: { id: { in: menuItemIds } },
+    where: { id: { in: menuItemIds }, deletedAt: null },
     include: {
       modifierGroups: {
         include: {

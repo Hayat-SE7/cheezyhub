@@ -9,6 +9,7 @@
 
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { prisma } from '../config/db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { applyStatusChange } from '../services/orderLifecycle';
@@ -63,6 +64,11 @@ adminRouter.post('/staff', async (req: AuthenticatedRequest, res: Response) => {
 
 adminRouter.patch('/staff/:id', async (req: AuthenticatedRequest, res: Response) => {
   const { isActive, pin, fullName, phone, role } = req.body;
+  const validRoles = ['kitchen', 'delivery', 'admin', 'cashier'];
+  if (role !== undefined && !validRoles.includes(role)) {
+    res.status(400).json({ success: false, error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+    return;
+  }
   const data: any = {};
   if (typeof isActive === 'boolean') data.isActive = isActive;
   if (pin !== undefined) data.pinHash = await bcrypt.hash(String(pin), 10);
@@ -74,8 +80,18 @@ adminRouter.patch('/staff/:id', async (req: AuthenticatedRequest, res: Response)
 });
 
 adminRouter.delete('/staff/:id', async (req: AuthenticatedRequest, res: Response) => {
-  await prisma.staff.delete({ where: { id: req.params.id } });
-  res.json({ success: true });
+  try {
+    await prisma.staff.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (err: any) {
+    if (err?.code === 'P2003') {
+      res.status(409).json({ success: false, error: 'Cannot delete staff member with existing orders or ledger entries. Deactivate them instead.' });
+    } else if (err?.code === 'P2025') {
+      res.status(404).json({ success: false, error: 'Staff member not found' });
+    } else {
+      res.status(500).json({ success: false, error: 'Failed to delete staff member' });
+    }
+  }
 });
 
 adminRouter.post('/staff/:id/reset-pin', async (req: AuthenticatedRequest, res: Response) => {
@@ -164,7 +180,11 @@ adminRouter.patch('/customers/:id', async (req: AuthenticatedRequest, res: Respo
   const data: any = {};
   if (adminNote !== undefined) data.adminNote = adminNote;
   if (isBlocked !== undefined) data.isBlocked = isBlocked;
-  if (tags !== undefined) data.tags = tags;
+  if (tags !== undefined) {
+    const parsed = z.array(z.string()).safeParse(tags);
+    if (!parsed.success) { res.status(400).json({ success: false, error: 'Tags must be an array of strings' }); return; }
+    data.tags = parsed.data;
+  }
   res.json({ success: true, data: await prisma.user.update({ where: { id: req.params.id }, data, select: { id: true, name: true, adminNote: true, isBlocked: true, tags: true } }) });
 });
 
@@ -276,7 +296,7 @@ adminRouter.get('/stats', async (_req, res: Response) => {
 });
 
 adminRouter.get('/analytics', async (req: AuthenticatedRequest, res: Response) => {
-  const range = parseInt((req.query.range as string) || '7');
+  const range = Math.min(parseInt((req.query.range as string) || '7') || 7, 365);
 
   const now  = new Date();
   const from = new Date(now);
@@ -498,7 +518,7 @@ adminRouter.patch('/menu/categories/:id', async (req: AuthenticatedRequest, res:
   res.json({ success: true, data: await prisma.category.update({ where: { id: req.params.id }, data: d }) });
 });
 adminRouter.delete('/menu/categories/:id', async (req: AuthenticatedRequest, res: Response) => {
-  await prisma.category.delete({ where: { id: req.params.id } });
+  await prisma.category.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   res.json({ success: true });
 });
 adminRouter.get('/menu/items/:id', async (req: AuthenticatedRequest, res: Response) => {
@@ -532,7 +552,7 @@ adminRouter.patch('/menu/modifiers/:id/availability', async (req: AuthenticatedR
   res.json({ success: true, data: await prisma.modifier.update({ where: { id: req.params.id }, data: { isAvailable: req.body.isAvailable } }) });
 });
 adminRouter.delete('/menu/items/:id', async (req: AuthenticatedRequest, res: Response) => {
-  await prisma.menuItem.delete({ where: { id: req.params.id } });
+  await prisma.menuItem.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   res.json({ success: true });
 });
 
@@ -566,11 +586,8 @@ adminRouter.delete('/deals/:id', async (req: AuthenticatedRequest, res: Response
 
 // ─── MISC ────────────────────────────────────────────────────────
 
-adminRouter.get('/drivers', async (_req, res: Response) => {
-  res.json({ success: true, data: await prisma.staff.findMany({ where: { role: 'delivery', isActive: true }, select: { id: true, username: true, fullName: true }, orderBy: { username: 'asc' } }) });
-});
 adminRouter.get('/notifications', async (_req, res: Response) => {
-  const logs = await prisma.notificationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }).catch(() => []);
+  const logs = await prisma.notificationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }).catch((): never[] => []);
   res.json({ success: true, data: logs });
 });
 adminRouter.get('/dashboard', async (_req, res: Response) => {

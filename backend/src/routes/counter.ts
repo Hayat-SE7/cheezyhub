@@ -25,10 +25,11 @@ function generateOrderNumber(): string {
 }
 
 const MENU_INCLUDE = {
+  where:   { deletedAt: null as null },
   orderBy: { sortOrder: 'asc' as const },
   include: {
     items: {
-      where:   { isAvailable: true },
+      where:   { isAvailable: true, deletedAt: null as null },
       orderBy: { sortOrder: 'asc' as const },
       include: {
         modifierGroups: {
@@ -82,7 +83,7 @@ counterRouter.post('/orders', async (req: AuthenticatedRequest, res: Response) =
   const cashierId = req.user!.userId;
 
   try {
-    const { lines, subtotal } = await validateAndPriceOrder(items);
+    const { lines, subtotal } = await validateAndPriceOrder(items as any);
     const total = subtotal;
 
     const activeShift = await prisma.shift.findFirst({
@@ -110,6 +111,7 @@ counterRouter.post('/orders', async (req: AuthenticatedRequest, res: Response) =
           deliveryAddress:  'Counter',
           notes:            customerNote,
           cashierId,
+          shiftId:          activeShift.id,
           offlineSync:      offlineSync ?? false,
           offlineCreatedAt: offlineCreatedAt ? new Date(offlineCreatedAt) : null,
           items: {
@@ -198,8 +200,8 @@ counterRouter.post('/ledger', async (req: AuthenticatedRequest, res: Response) =
   });
   const entry = await prisma.ledgerEntry.upsert({
     where:  { orderId: parsed.data.orderId },
-    update: { ...parsed.data, cashierId, shiftId: activeShift?.id },
-    create: { ...parsed.data, cashierId, shiftId: activeShift?.id },
+    update: { ...parsed.data, cashierId, shiftId: activeShift?.id } as any,
+    create: { ...parsed.data, cashierId, shiftId: activeShift?.id } as any,
   });
   res.json({ success: true, data: entry });
 });
@@ -293,7 +295,7 @@ counterRouter.post('/sync', async (req: AuthenticatedRequest, res: Response) => 
     // Idempotency check
     const existing = await prisma.offlineSyncLog.findUnique({
       where: { idempotencyKey: item.idempotencyKey },
-    }).catch(() => null);
+    }).catch((): null => null);
 
     if (existing) {
       results.push({ idempotencyKey: item.idempotencyKey, status: 'duplicate', orderId: existing.orderId ?? undefined });
@@ -301,7 +303,7 @@ counterRouter.post('/sync', async (req: AuthenticatedRequest, res: Response) => 
     }
 
     try {
-      const { lines, subtotal } = await validateAndPriceOrder(item.items);
+      const { lines, subtotal } = await validateAndPriceOrder(item.items as any);
       const total = subtotal;
 
       const activeShift = await prisma.shift.findFirst({
@@ -323,6 +325,7 @@ counterRouter.post('/sync', async (req: AuthenticatedRequest, res: Response) => 
             deliveryAddress:  'Counter',
             notes:            item.customerNote,
             cashierId,
+            shiftId:          activeShift?.id ?? null,
             offlineSync:      true,
             offlineCreatedAt: new Date(item.offlineCreatedAt),
             items: {

@@ -47,5 +47,8 @@ test-results/
 # Archives
 *.zip
 
+# Firebase service account credentials
+backend/src/config/firebase-adminsdk.json
+
 # Git worktrees
 .worktrees/

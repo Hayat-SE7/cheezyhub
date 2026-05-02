@@ -13,6 +13,7 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import LocationPopup from '@/components/customer/LocationPopup';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import Footer from '@/components/customer/Footer';
 import { brand } from '@/config/brand';
 
@@ -54,8 +55,10 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const isActive = (href: string) =>
     href === '/customer' ? pathname === href : pathname.startsWith(href);
 
+  const validateCart = useCartStore((s) => s.validateCart);
+  const cartItems = useCartStore((s) => s.items);
+
   // Guard: if store says authenticated but cookie is gone, redirect to login
-  // This breaks the stale-store 401 loop (e.g. menu/all hitting 401 repeatedly)
   useEffect(() => {
     if (isPublic) return;
     const token = Cookies.get('ch_token');
@@ -63,6 +66,22 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       router.replace('/customer/login');
     }
   }, [pathname, isPublic]);
+
+  // Validate cart items on mount — remove items whose menu items or modifiers no longer exist
+  useEffect(() => {
+    if (cartItems.length === 0) return;
+    validateCart().then((removed) => {
+      if (removed.length > 0) {
+        // Dynamic import to avoid SSR issues with toast
+        import('react-hot-toast').then(({ default: toast }) => {
+          toast.error(
+            `Removed ${removed.length} item(s) from cart: ${removed.join(', ')}`,
+            { duration: 6000 }
+          );
+        });
+      }
+    });
+  }, []); // Run once on mount
 
   // Login page renders standalone — no navbar/footer
   if (isPublic) return <>{children}</>;
@@ -179,7 +198,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
       {/* ── MAIN ───────────────────────────────────────── */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-28 lg:pb-8 pt-2">
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
 
       {/* Footer — desktop only */}

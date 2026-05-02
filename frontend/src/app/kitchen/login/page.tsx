@@ -20,12 +20,12 @@ export default function KitchenLoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ identifier: username, pin, role: 'staff' });
-      const { token, user } = res.data.data;
+      const { token, refreshToken, user } = res.data.data;
       if (user.role !== 'kitchen' && user.role !== 'admin') {
         toast.error('Kitchen access required');
         return;
       }
-      login(token, user);
+      login(token, user, refreshToken);
       router.replace('/kitchen');
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? 'Invalid credentials');

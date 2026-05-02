@@ -19,6 +19,7 @@ import FailedQueueModal from '@/components/counter/FailedQueueModal';
 import { counterApi } from '@/lib/api';
 import { LogOut, Timer, AlertCircle, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
 
@@ -109,11 +110,17 @@ export default function CounterLayout({ children }: { children: React.ReactNode 
       playBeep('reconnect');
       const pending = pendingCount();
       if (pending > 0) {
-        toast(`Back online — syncing ${pending} queued order${pending > 1 ? 's' : ''}…`, { icon: '🔄', duration: 3000 });
-        drainQueue().then((result) => {
-          if (result.created > 0) toast.success(`${result.created} order${result.created > 1 ? 's' : ''} synced!`);
-          if (result.failed  > 0) toast.error(`${result.failed} failed — tap to review`);
-        });
+        // Verify token is still valid before draining
+        const token = Cookies.get('ch_counter_token');
+        if (!token) {
+          toast.error('Session expired — log in to sync queued orders');
+        } else {
+          toast(`Back online — syncing ${pending} queued order${pending > 1 ? 's' : ''}…`, { icon: '🔄', duration: 3000 });
+          drainQueue().then((result) => {
+            if (result.created > 0) toast.success(`${result.created} order${result.created > 1 ? 's' : ''} synced!`);
+            if (result.failed  > 0) toast.error(`${result.failed} failed — tap to review`);
+          });
+        }
       }
     }
 
@@ -164,13 +171,13 @@ export default function CounterLayout({ children }: { children: React.ReactNode 
           <button onClick={() => router.push('/counter/shift')} className="text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors bg-[#1A1A22] text-[#9898A5] hover:text-amber-400 hover:bg-amber-500/10">
             Shift
           </button>
-          <button onClick={handleLogout} className="w-8 h-8 rounded-xl flex items-center justify-center transition-all text-[#3A3A48] hover:text-red-400 hover:bg-red-500/10">
+          <button onClick={handleLogout} aria-label="Logout" className="w-8 h-8 rounded-xl flex items-center justify-center transition-all text-[#3A3A48] hover:text-red-400 hover:bg-red-500/10">
             <LogOut size={15} />
           </button>
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex-1 overflow-hidden"><ErrorBoundary>{children}</ErrorBoundary></main>
     </div>
   );
 }

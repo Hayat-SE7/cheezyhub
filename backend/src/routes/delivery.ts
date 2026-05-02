@@ -18,9 +18,11 @@ import { Router, Response } from 'express';
 import { prisma } from '../config/db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { applyStatusChange } from '../services/orderLifecycle';
+import { retryPendingAssignments } from '../services/assignmentService';
 import { AppError } from '../middleware/errorHandler';
 import { OrderStatus } from '@prisma/client';
 import { sseManager } from '../services/sseManager';
+import { createUploader, getFileUrl } from '../services/uploadService';
 
 export const deliveryRouter = Router();
 
@@ -182,10 +184,97 @@ deliveryRouter.patch('/status', async (req: AuthenticatedRequest, res: Response)
       driverStatus: staff.driverStatus,
     });
 
+    // Driver just came online — try to assign any orders stuck in 'ready'
+    if (status === 'AVAILABLE') {
+      retryPendingAssignments().catch((err) =>
+        console.error('[Delivery] retryPendingAssignments failed:', err)
+      );
+    }
+
     res.json({ success: true, data: staff });
   } catch (err) {
     console.error('[Delivery] Status toggle error:', err);
     res.status(500).json({ success: false, error: 'Failed to update status' });
+  }
+});
+
+// ─── POST /api/delivery/upload-document ───────────
+//     Upload a driver verification document (CNIC, license, profile photo)
+//     Returns the URL for the uploaded file
+
+const docUploader = createUploader('documents');
+const VALID_DOC_FIELDS = ['cnicFrontUrl', 'cnicBackUrl', 'licensePhotoUrl', 'profilePhotoUrl'];
+
+deliveryRouter.post(
+  '/upload-document',
+  docUploader.single('file'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const file = (req as any).file;
+    if (!file) {
+      res.status(400).json({ success: false, error: 'No file uploaded' });
+      return;
+    }
+
+    const field = req.body.field;
+    if (!field || !VALID_DOC_FIELDS.includes(field)) {
+      res.status(400).json({
+        success: false,
+        error: `Invalid field. Must be one of: ${VALID_DOC_FIELDS.join(', ')}`,
+      });
+      return;
+    }
+
+    try {
+      const url = getFileUrl('documents', file.filename);
+
+      // Update the driver's profile with the uploaded document URL
+      await prisma.staff.update({
+        where: { id: req.user!.userId },
+        data: { [field]: url },
+      });
+
+      // Check if all docs are now present → auto-set UNDER_REVIEW
+      const current = await prisma.staff.findUnique({
+        where: { id: req.user!.userId },
+        select: { cnicFrontUrl: true, cnicBackUrl: true, licensePhotoUrl: true, verificationStatus: true },
+      });
+
+      if (current) {
+        const allDocsPresent = current.cnicFrontUrl && current.cnicBackUrl && current.licensePhotoUrl;
+        if (allDocsPresent && current.verificationStatus === 'PENDING') {
+          await prisma.staff.update({
+            where: { id: req.user!.userId },
+            data: { verificationStatus: 'UNDER_REVIEW' },
+          });
+        }
+      }
+
+      res.json({ success: true, data: { url, field } });
+    } catch (err) {
+      console.error('[Delivery] Document upload error:', err);
+      res.status(500).json({ success: false, error: 'Failed to upload document' });
+    }
+  }
+);
+
+// ─── PATCH /api/delivery/location ─────────────────
+//     Update driver's live GPS coordinates (called periodically by driver app)
+
+deliveryRouter.patch('/location', async (req: AuthenticatedRequest, res: Response) => {
+  const { lat, lng } = req.body;
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    res.status(400).json({ success: false, error: 'lat and lng are required numbers' });
+    return;
+  }
+  try {
+    await prisma.staff.update({
+      where: { id: req.user!.userId },
+      data: { liveLat: lat, liveLng: lng, lastLocationAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Delivery] Location update error:', err);
+    res.status(500).json({ success: false, error: 'Failed to update location' });
   }
 });
 

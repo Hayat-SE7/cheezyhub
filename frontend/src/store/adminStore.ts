@@ -29,7 +29,7 @@ interface AdminState {
   token:           string | null;
   isAuthenticated: boolean;
 
-  login:  (token: string, user: AdminUser) => void;
+  login:  (token: string, user: AdminUser, refreshToken?: string) => void;
   logout: () => void;
 }
 
@@ -40,19 +40,20 @@ export const useAdminStore = create<AdminState>()(
       token:           null,
       isAuthenticated: false,
 
-      login: (token, user) => {
-        // CRITICAL: must be 'ch_admin_token' — this is what _admin
-        // axios instance and useAdminSSE both read
+      login: (token, user, refreshToken) => {
         Cookies.set('ch_admin_token', token, {
-          expires:  1,           // 24 hours (matches backend JWT expiry)
+          expires:  1,
           sameSite: 'strict',
           path:     '/',
+          secure:   window.location.protocol === 'https:',
         });
+        if (refreshToken) Cookies.set('ch_admin_refresh', refreshToken, { expires: 7, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
         set({ token, user, isAuthenticated: true });
       },
 
       logout: () => {
         Cookies.remove('ch_admin_token', { path: '/' });
+        Cookies.remove('ch_admin_refresh', { path: '/' });
         set({ token: null, user: null, isAuthenticated: false });
       },
     }),

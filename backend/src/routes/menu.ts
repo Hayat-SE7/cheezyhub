@@ -19,10 +19,11 @@ export const menuRouter = Router();
 // GET /api/menu — full public menu, available items only
 menuRouter.get('/', async (_req: Request, res: Response) => {
   const categories = await prisma.category.findMany({
+    where: { deletedAt: null },
     orderBy: { sortOrder: 'asc' },
     include: {
       items: {
-        where: { isAvailable: true },
+        where: { isAvailable: true, deletedAt: null },
         orderBy: { sortOrder: 'asc' },
         include: {
           modifierGroups: {
@@ -43,10 +44,11 @@ menuRouter.get('/settings/public', async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        deliveryFee:      settings?.deliveryFee      ?? 50,
-        serviceCharge:    settings?.serviceCharge    ?? 0,
-        restaurantName:   settings?.restaurantName   ?? 'CheezyHub',
-        ordersAccepting:  settings?.ordersAccepting  ?? true,
+        deliveryFee:            settings?.deliveryFee            ?? 50,
+        freeDeliveryThreshold:  settings?.freeDeliveryThreshold  ?? 0,
+        serviceCharge:          settings?.serviceCharge          ?? 0,
+        restaurantName:         settings?.restaurantName         ?? 'CheezyHub',
+        ordersAccepting:        settings?.ordersAccepting        ?? true,
       },
     });
   } catch (_err) {
@@ -154,7 +156,7 @@ menuRouter.delete(
       });
       return;
     }
-    await prisma.category.delete({ where: { id: req.params.id } });
+    await prisma.category.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     res.json({ success: true, message: 'Category deleted' });
   }
 );
@@ -246,7 +248,7 @@ menuRouter.post(
             },
           })),
         },
-      },
+      } as any,
       include: {
         modifierGroups: {
           include: { modifiers: { orderBy: { sortOrder: 'asc' } } },
@@ -322,7 +324,7 @@ menuRouter.delete(
   authenticate,
   requireRole('admin'),
   async (req: Request, res: Response) => {
-    await prisma.menuItem.delete({ where: { id: req.params.id } });
+    await prisma.menuItem.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     res.json({ success: true, message: 'Item deleted' });
   }
 );

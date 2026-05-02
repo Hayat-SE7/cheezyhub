@@ -20,6 +20,7 @@
 import crypto   from 'crypto';
 import { prisma } from '../config/db';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../config/logger';
 
 // ─── Constants ────────────────────────────────────────
 
@@ -35,8 +36,28 @@ function generateOtp(): string {
 }
 
 function hashOtp(otp: string): string {
-  const secret = process.env.OTP_SECRET ?? 'ch-otp-dev-secret-change-in-prod';
+  const secret = process.env.OTP_SECRET!;
   return crypto.createHmac('sha256', secret).update(otp).digest('hex');
+}
+
+/**
+ * Normalizes a Pakistani mobile number to E.164 format (+923xxxxxxxxx).
+ * Handles: 03xx, 3xx, +923xx, 923xx, 0092-3xx variants.
+ */
+function normalizeToE164(mobile: string): string {
+  let cleaned = mobile.replace(/[\s\-()]/g, '');
+  // Already in E.164 with +92
+  if (/^\+92\d{10}$/.test(cleaned)) return cleaned;
+  // 923xxxxxxxxx (without +)
+  if (/^92\d{10}$/.test(cleaned)) return `+${cleaned}`;
+  // 003xxxxxxxxx (international dialing)
+  if (/^0092\d{10}$/.test(cleaned)) return `+${cleaned.slice(2)}`;
+  // 03xxxxxxxxx (local format)
+  if (/^0\d{10}$/.test(cleaned)) return `+92${cleaned.slice(1)}`;
+  // 3xxxxxxxxx (without leading 0)
+  if (/^3\d{9}$/.test(cleaned)) return `+92${cleaned}`;
+  // Not recognizable — return as-is (let provider reject if invalid)
+  return cleaned;
 }
 
 // ─── Rate limit check ─────────────────────────────────
@@ -67,32 +88,47 @@ async function enforceCooldown(mobile: string): Promise<void> {
  * It becomes a real account after the customer completes registration.
  */
 export async function generateAndStoreOtp(mobile: string): Promise<string> {
-  await enforceCooldown(mobile);
-
   const otp          = generateOtp();
   const otpHash      = hashOtp(otp);
   const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-  await prisma.user.upsert({
-    where:  { mobile },
-    create: {
-      name:          '',
-      mobile,
-      pinHash:       '',
-      role:          'customer',
-      isVerified:    false,
-      otpHash,
-      otpExpiresAt,
-      otpAttempts:   0,
-      otpLastSentAt: new Date(),
-    },
-    update: {
-      otpHash,
-      otpExpiresAt,
-      otpAttempts:   0,
-      otpLastSentAt: new Date(),
-    },
-    select: { id: true },
+  // Atomic: cooldown check + OTP store inside a single transaction
+  // to prevent parallel requests both passing the cooldown window
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findFirst({
+      where:  { mobile },
+      select: { otpLastSentAt: true },
+    });
+
+    if (user?.otpLastSentAt) {
+      const elapsed = Date.now() - user.otpLastSentAt.getTime();
+      if (elapsed < OTP_RESEND_COOLDOWN) {
+        const wait = Math.ceil((OTP_RESEND_COOLDOWN - elapsed) / 1000);
+        throw new AppError(`Wait ${wait}s before requesting another OTP.`, 429);
+      }
+    }
+
+    await tx.user.upsert({
+      where:  { mobile },
+      create: {
+        name:          '',
+        mobile,
+        pinHash:       '',
+        role:          'customer',
+        isVerified:    false,
+        otpHash,
+        otpExpiresAt,
+        otpAttempts:   0,
+        otpLastSentAt: new Date(),
+      },
+      update: {
+        otpHash,
+        otpExpiresAt,
+        otpAttempts:   0,
+        otpLastSentAt: new Date(),
+      },
+      select: { id: true },
+    });
   });
 
   return otp;
@@ -202,16 +238,9 @@ export async function completeRegistration(
  */
 export async function sendOtpViaSms(mobile: string, otp: string): Promise<void> {
   const provider = process.env.OTP_PROVIDER ?? 'stub';
+  const e164 = normalizeToE164(mobile);
 
   // ── Twilio Verify ─────────────────────────────────
-  // Twilio Verify manages OTP generation + delivery itself.
-  // With this provider you don't pass `otp` — Twilio generates it.
-  // The flow changes: send-otp hits Twilio Verify, verify-otp checks with Twilio.
-  // See: https://www.twilio.com/docs/verify/api
-  //
-  // Install: npm install twilio
-  // Required env vars: TWILIO_SID, TWILIO_TOKEN, TWILIO_VERIFY_SID
-  //
   if (provider === 'twilio_verify') {
     const sid      = process.env.TWILIO_SID;
     const token    = process.env.TWILIO_TOKEN;
@@ -223,18 +252,20 @@ export async function sendOtpViaSms(mobile: string, otp: string): Promise<void> 
         500
       );
     }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const twilio = require('twilio')(sid, token);
-    await twilio.verify.v2
-      .services(svcSid)
-      .verifications.create({ to: mobile, channel: 'sms' });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const twilio = require('twilio')(sid, token);
+      await twilio.verify.v2
+        .services(svcSid)
+        .verifications.create({ to: e164, channel: 'sms' });
+    } catch (err: any) {
+      logger.error({ mobile: e164, error: err.message, code: err.code }, 'Twilio Verify failed');
+      throw new AppError('Failed to send OTP. Please try again.', 500);
+    }
     return;
   }
 
   // ── Twilio plain SMS ──────────────────────────────
-  // Sends the OTP in a plain SMS message using your Twilio number.
-  // Required env vars: TWILIO_SID, TWILIO_TOKEN, TWILIO_SMS_FROM
-  //
   if (provider === 'twilio_sms') {
     const sid   = process.env.TWILIO_SID;
     const token = process.env.TWILIO_TOKEN;
@@ -246,18 +277,23 @@ export async function sendOtpViaSms(mobile: string, otp: string): Promise<void> 
         500
       );
     }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const twilio = require('twilio')(sid, token);
-    await twilio.messages.create({
-      from,
-      to:   mobile,
-      body: `Your CheezyHub verification code is: ${otp}\n\nValid for 10 minutes. Do not share this code.`,
-    });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const twilio = require('twilio')(sid, token);
+      await twilio.messages.create({
+        from,
+        to:   e164,
+        body: `Your CheezyHub verification code is: ${otp}\n\nValid for 10 minutes. Do not share this code.`,
+      });
+    } catch (err: any) {
+      logger.error({ mobile: e164, error: err.message, code: err.code }, 'Twilio SMS failed');
+      throw new AppError('Failed to send OTP. Please try again.', 500);
+    }
     return;
   }
 
   // ── Stub (development default) ────────────────────
-  console.log(`\n🔐 [OTP STUB] To: ${mobile}  Code: ${otp}  (valid 10 min)\n`);
+  logger.info({ mobile: e164, otp }, 'OTP stub — use this code to verify');
 }
 
 // ─── Twilio Verify: check code (alternative flow) ────

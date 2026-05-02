@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAdminStore } from '@/store/adminStore';
 import { clsx } from 'clsx';
 import Cookies from 'js-cookie';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Tag,
   Users, UserCog, Settings, MessageSquare, Truck, LogOut, BarChart2,
@@ -82,6 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 key={href}
                 href={href}
                 title={label}
+                aria-label={label}
                 className={clsx(
                   'flex items-center gap-2.5 px-3 xl:px-4 py-2.5 mx-1 xl:mx-2 rounded-xl text-sm font-medium transition-colors',
                   active
@@ -89,7 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     : 'text-[#4A4A58] hover:text-[#F2F2F5] hover:bg-[#0F1420]'
                 )}
               >
-                <Icon size={16} className="flex-shrink-0" />
+                <Icon size={16} className="flex-shrink-0" aria-hidden="true" />
                 <span className="hidden xl:block truncate">{label}</span>
               </Link>
             );
@@ -102,6 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <button
             onClick={handleLogout}
             title="Logout"
+            aria-label="Logout"
             className="flex items-center gap-2 text-xs text-[#4A4A58] hover:text-red-400 transition-colors w-full"
           >
             <LogOut size={13} className="flex-shrink-0" />
@@ -112,7 +115,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto min-h-screen">
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
     </div>
   );

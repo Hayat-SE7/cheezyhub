@@ -9,7 +9,7 @@ export interface KitchenUser {
 interface KitchenState {
   user: KitchenUser | null; token: string | null; isAuthenticated: boolean;
   sseConnected: boolean;
-  login:  (token: string, user: KitchenUser) => void;
+  login:  (token: string, user: KitchenUser, refreshToken?: string) => void;
   logout: () => void;
   setSseConnected: (v: boolean) => void;
 }
@@ -20,12 +20,14 @@ export const useKitchenStore = create<KitchenState>()(
       user: null, token: null, isAuthenticated: false,
       sseConnected: false,
       setSseConnected: (v) => set({ sseConnected: v }),
-      login: (token, user) => {
-        Cookies.set('ch_kitchen_token', token, { expires: 1, sameSite: 'strict', path: '/' });
+      login: (token, user, refreshToken) => {
+        Cookies.set('ch_kitchen_token', token, { expires: 1, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
+        if (refreshToken) Cookies.set('ch_kitchen_refresh', refreshToken, { expires: 7, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
         set({ token, user, isAuthenticated: true });
       },
       logout: () => {
         Cookies.remove('ch_kitchen_token', { path: '/' });
+        Cookies.remove('ch_kitchen_refresh', { path: '/' });
         set({ token: null, user: null, isAuthenticated: false });
       },
     }),

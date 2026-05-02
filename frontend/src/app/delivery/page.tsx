@@ -7,7 +7,7 @@ import { deliveryApi } from '@/lib/api';
 import { useDeliverySSE } from '@/hooks/useDeliverySSE';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { MapPin, Phone, Navigation, AlertCircle, Package } from 'lucide-react';
+import { MapPin, Phone, Navigation, AlertCircle, Package, WifiOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -48,6 +48,10 @@ export default function DeliveryDashboard() {
     COD_SETTLED: (data: any) => {
       updateUser({ codPending: data.remainingAmount });
       toast.success(data.message);
+    },
+    DRIVER_STATUS_CHANGED: (data: any) => {
+      updateStatus(data.driverStatus);
+      queryClient.invalidateQueries({ queryKey: ['my-deliveries'] });
     },
     HOLIDAY_REQUEST_REVIEWED: (data: any) => {
       if (data.status === 'APPROVED') toast.success(data.message, { icon: '✅', duration: 8000 });
@@ -91,12 +95,21 @@ export default function DeliveryDashboard() {
     } catch {}
   };
 
+  const sseConnected = useDeliveryStore((s) => s.sseConnected);
   const isOnline     = user?.driverStatus === 'AVAILABLE';
   const isOnDelivery = user?.driverStatus === 'ON_DELIVERY';
   const activeOrder  = orders[0] ?? null;
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-112px)]">
+
+      {/* SSE disconnection warning */}
+      {!sseConnected && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border-b border-red-500/25 text-red-400 text-xs font-semibold">
+          <WifiOff size={13} />
+          Live updates paused — reconnecting...
+        </div>
+      )}
 
       {/* ── Map Area ──────────────────────────────────────── */}
       <div className="relative flex-shrink-0 h-[38vh] bg-[#060E0C] overflow-hidden">

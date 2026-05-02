@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDeliveryStore } from '@/store/deliveryStore';
 import { deliveryApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   CheckCircle2, Clock, XCircle, AlertCircle, ChevronDown, ChevronUp,
-  LogOut, User, Phone, CreditCard, Car, Link as LinkIcon,
+  LogOut, User, Phone, CreditCard, Car, Upload, Camera, Loader2, Image as ImageIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
@@ -16,7 +16,7 @@ const VEHICLE_TYPES = ['bike', 'car', 'van'];
 const STATUS_CONFIG = {
   PENDING:      { color: 'text-zinc-400',  bg: 'bg-zinc-800',       icon: AlertCircle,   label: 'Not Submitted'    },
   UNDER_REVIEW: { color: 'text-amber-400', bg: 'bg-amber-400/10',   icon: Clock,         label: 'Under Review'     },
-  VERIFIED:     { color: 'text-lime-400',  bg: 'bg-lime-400/10',    icon: CheckCircle2,  label: 'Verified ✓'       },
+  VERIFIED:     { color: 'text-lime-400',  bg: 'bg-lime-400/10',    icon: CheckCircle2,  label: 'Verified'         },
   REJECTED:     { color: 'text-red-400',   bg: 'bg-red-400/10',     icon: XCircle,       label: 'Rejected'         },
 };
 
@@ -174,21 +174,23 @@ export default function DeliveryProfilePage() {
               {id === 'docs' && (
                 <>
                   <p className="text-xs text-zinc-500 pt-1">
-                    Upload your documents to an image host (e.g. Cloudinary / ImgBB) and paste the URLs below.
-                    All 3 docs required to submit for verification.
+                    Upload your documents below. All 3 are required for verification.
+                    Accepted formats: JPEG, PNG, WebP, PDF (max 5MB).
                   </p>
                   {docs.map(doc => (
-                    <UrlField
+                    <DocumentUploadField
                       key={doc.key}
                       label={doc.label}
-                      value={form[doc.key as keyof typeof form] as string}
-                      onChange={v => setForm(f => ({...f, [doc.key]: v}))}
+                      field={doc.key}
+                      currentUrl={form[doc.key as keyof typeof form] as string}
+                      onUploaded={(url) => setForm(f => ({...f, [doc.key]: url}))}
                     />
                   ))}
-                  <UrlField
+                  <DocumentUploadField
                     label="Profile Photo (optional)"
-                    value={form.profilePhotoUrl}
-                    onChange={v => setForm(f => ({...f, profilePhotoUrl: v}))}
+                    field="profilePhotoUrl"
+                    currentUrl={form.profilePhotoUrl}
+                    onUploaded={(url) => setForm(f => ({...f, profilePhotoUrl: url}))}
                   />
                   {!docsComplete && (
                     <p className="text-xs text-zinc-600 flex items-center gap-1">
@@ -215,7 +217,7 @@ export default function DeliveryProfilePage() {
         disabled={saving}
         className="w-full py-3.5 rounded-xl bg-lime-400 text-black font-bold text-sm disabled:opacity-50 hover:bg-lime-300 transition-colors"
       >
-        {saving ? 'Saving…' : 'Save Changes'}
+        {saving ? 'Saving...' : 'Save Changes'}
       </button>
 
       {/* Logout */}
@@ -247,20 +249,123 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
   );
 }
 
-function UrlField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function DocumentUploadField({ label, field, currentUrl, onUploaded }: {
+  label: string;
+  field: string;
+  currentUrl: string;
+  onUploaded: (url: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large. Maximum 5MB.');
+      return;
+    }
+
+    // Show local preview
+    const reader = new FileReader();
+    reader.onload = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setUploading(true);
+    try {
+      const res = await deliveryApi.uploadDocument(file, field);
+      const url = res.data.data.url;
+      onUploaded(url);
+      toast.success(`${label} uploaded!`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error ?? 'Upload failed');
+      setPreview(null);
+    } finally {
+      setUploading(false);
+      // Reset input so same file can be re-selected
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const displayUrl = preview || currentUrl;
+  const isImage = displayUrl && !displayUrl.endsWith('.pdf');
+
   return (
     <div>
       <label className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1">
-        <LinkIcon size={10} /> {label}
-        {value && <CheckCircle2 size={10} className="text-lime-400 ml-1" />}
+        <Camera size={10} /> {label}
+        {currentUrl && <CheckCircle2 size={10} className="text-lime-400 ml-1" />}
       </label>
+
       <input
-        type="url"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="https://..."
-        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-lime-400/40 transition-colors"
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        onChange={handleFileChange}
+        className="hidden"
       />
+
+      {displayUrl ? (
+        <div className="relative group">
+          {isImage ? (
+            <img
+              src={displayUrl}
+              alt={label}
+              className="w-full h-32 object-cover rounded-xl border border-zinc-700"
+            />
+          ) : (
+            <div className="w-full h-32 rounded-xl border border-zinc-700 bg-zinc-800 flex items-center justify-center">
+              <div className="text-center">
+                <ImageIcon size={24} className="text-zinc-500 mx-auto" />
+                <p className="text-xs text-zinc-500 mt-1">PDF Document</p>
+              </div>
+            </div>
+          )}
+
+          {/* Re-upload overlay */}
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center"
+          >
+            {uploading ? (
+              <Loader2 size={20} className="text-white animate-spin" />
+            ) : (
+              <div className="text-center">
+                <Upload size={18} className="text-white mx-auto" />
+                <p className="text-xs text-white mt-1">Replace</p>
+              </div>
+            )}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className={clsx(
+            'w-full h-28 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors',
+            uploading
+              ? 'border-lime-400/30 bg-lime-400/5'
+              : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 hover:bg-zinc-800'
+          )}
+        >
+          {uploading ? (
+            <>
+              <Loader2 size={20} className="text-lime-400 animate-spin" />
+              <span className="text-xs text-lime-400">Uploading...</span>
+            </>
+          ) : (
+            <>
+              <Upload size={20} className="text-zinc-500" />
+              <span className="text-xs text-zinc-500">Tap to upload {label.toLowerCase()}</span>
+              <span className="text-[10px] text-zinc-600">JPEG, PNG, WebP, PDF up to 5MB</span>
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

@@ -21,14 +21,27 @@ import { addressRouter } from './routes/addresses';
 import { favouritesRouter } from './routes/favourites';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { prisma } from './config/db';
+import { sseManager } from './services/sseManager';
+import { startTimeoutService, stopTimeoutService } from './services/timeoutService';
+import { logger } from './config/logger';
 
 // ─── Startup Validation ─────────────────────
-const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'] as const;
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    console.error(`FATAL: Missing required env var: ${key}`);
-    process.exit(1);
+import { z } from 'zod';
+
+const envSchema = z.object({
+  JWT_SECRET:   z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
+  CORS_ORIGIN:  z.string().min(1, 'CORS_ORIGIN is required'),
+  OTP_SECRET:   z.string().min(16, 'OTP_SECRET must be at least 16 characters'),
+});
+
+const envResult = envSchema.safeParse(process.env);
+if (!envResult.success) {
+  for (const issue of envResult.error.issues) {
+    logger.fatal(`Env validation failed: ${issue.path.join('.')} — ${issue.message}`);
   }
+  process.exit(1);
 }
 
 const app = express();
@@ -58,6 +71,26 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/login-pin', authLimiter);
 
+// ─── OTP Rate Limiting (per-IP, stricter) ───
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many OTP requests. Please wait 15 minutes.' },
+});
+app.use('/api/auth/send-otp', otpLimiter);
+
+// ─── OTP Verify Rate Limiting (prevent brute-force) ─
+const verifyOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many verification attempts. Please wait 15 minutes.' },
+});
+app.use('/api/auth/verify-otp', verifyOtpLimiter);
+
 // ─── Safepay Webhook (MUST be registered BEFORE express.json()) ──
 // Safepay sends HMAC-signed webhook payloads that need the raw Buffer
 // body for signature verification. express.json() would parse it first.
@@ -68,17 +101,34 @@ app.post(
 );
 
 // ─── Parsing ─────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Request ID ─────────────────────────────
+import crypto from 'crypto';
+app.use((req, res, next) => {
+  (req as any).id = req.headers['x-request-id'] as string ?? crypto.randomUUID();
+  res.setHeader('X-Request-Id', (req as any).id);
+  next();
+});
 
 // ─── Logging ─────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
+// ─── Static file serving for uploads ─────────
+import path from 'path';
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
 // ─── Health ──────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: 'degraded', db: 'disconnected', timestamp: new Date().toISOString() });
+  }
 });
 
 // ─── Routes ──────────────────────────────────
@@ -102,8 +152,29 @@ app.use(notFound);
 app.use(errorHandler);
 
 // ─── Start ───────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🧀 CheezyHub API running on http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info(`CheezyHub API running on http://localhost:${PORT}`);
+  startTimeoutService();
 });
+
+// ─── Request Timeouts (slow-loris protection) ───
+server.requestTimeout = 30_000;
+server.headersTimeout = 10_000;
+
+// ─── Graceful Shutdown ──────────────────────
+function shutdown(signal: string) {
+  logger.info(`${signal} received — shutting down gracefully`);
+  stopTimeoutService();
+  sseManager.closeAll();
+  server.close(async () => {
+    await prisma.$disconnect();
+    logger.info('Server closed');
+    process.exit(0);
+  });
+  // Force exit after 10s if drain doesn't complete
+  setTimeout(() => process.exit(1), 10_000);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 export default app;

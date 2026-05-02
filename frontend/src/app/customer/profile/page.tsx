@@ -7,8 +7,9 @@ import { useRouter } from 'next/navigation';
 import {
   LogOut, Phone, Mail, MapPin, Plus, Pencil,
   Trash2, Check, Navigation, Home, Briefcase,
-  Star, Loader2, ChevronRight,
+  Star, Loader2, ChevronRight, LocateFixed,
 } from 'lucide-react';
+import { reverseGeocode } from '@/lib/geocode';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -132,6 +133,42 @@ function AddressForm({ initial, onSave, onCancel }: {
   const [isDefault, setDefault] = useState(initial?.isDefault   ?? false);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
+  const [lat,      setLat]      = useState<number | null>(initial?.latitude  ?? null);
+  const [lng,      setLng]      = useState<number | null>(initial?.longitude ?? null);
+  const [isGps,    setIsGps]    = useState(initial?.isGps ?? false);
+  const [detectingGps, setDetectingGps] = useState(false);
+
+  const handleDetectGps = () => {
+    if (!navigator.geolocation) { setError('GPS not supported on this device'); return; }
+    setDetectingGps(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setLat(latitude);
+        setLng(longitude);
+        setIsGps(true);
+        try {
+          const geo = await reverseGeocode(latitude, longitude);
+          if (geo.houseNumber) setHouseNo(geo.houseNumber);
+          if (geo.road)          setStreet(geo.road);
+          if (geo.neighbourhood) setArea(geo.neighbourhood);
+          if (geo.city)          setCity(geo.city);
+          setLabel('Current Location');
+        } catch { /* fields stay empty, user fills manually */ }
+        setDetectingGps(false);
+      },
+      (err) => {
+        setDetectingGps(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setError('Location access denied. Allow GPS in browser settings.');
+        } else {
+          setError('Could not detect location. Enter manually.');
+        }
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
 
   const handleSave = async () => {
     const parts = [houseNo, street, area, city].filter(Boolean);
@@ -139,11 +176,13 @@ function AddressForm({ initial, onSave, onCancel }: {
     const addressText = parts.join(', ');
     setSaving(true);
     try {
+      const payload: any = { label, type, addressText, houseNo, street, area, city, notes, isDefault };
+      if (lat && lng) { payload.latitude = lat; payload.longitude = lng; payload.isGps = isGps; }
       if (initial?.id) {
-        await addressApi.update(initial.id, { label, type, addressText, houseNo, street, area, city, notes, isDefault });
+        await addressApi.update(initial.id, payload);
         toast.success('Address updated');
       } else {
-        await addressApi.create({ label, type, addressText, houseNo, street, area, city, notes, isDefault });
+        await addressApi.create(payload);
         toast.success('Address added!');
       }
       onSave();
@@ -161,6 +200,31 @@ function AddressForm({ initial, onSave, onCancel }: {
       <h3 className="font-display font-bold text-[#f5d38e] text-base mb-4">
         {initial?.id ? 'Edit Address' : 'Add New Address'}
       </h3>
+
+      {/* GPS detect button */}
+      {!initial?.id && (
+        <button
+          type="button"
+          onClick={handleDetectGps}
+          disabled={detectingGps}
+          className="w-full flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+        >
+          {detectingGps
+            ? <Loader2 size={16} className="animate-spin" />
+            : <LocateFixed size={16} />}
+          <div className="text-left">
+            <div className="text-sm font-semibold">{detectingGps ? 'Detecting location...' : 'Detect My Location'}</div>
+            <div className="text-[11px] text-amber-400/60">Auto-fill address using GPS</div>
+          </div>
+        </button>
+      )}
+
+      {/* GPS badge */}
+      {isGps && lat && lng && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+          <Navigation size={12} /> GPS detected — {lat.toFixed(5)}, {lng.toFixed(5)}
+        </div>
+      )}
 
       {error && <div className="text-red-400 text-sm mb-3 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
 

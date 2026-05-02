@@ -33,7 +33,7 @@ export default function KitchenHistoryPage() {
     queryKey: ['kitchen-history'],
     queryFn:  async () => {
       const res = await kitchenApi.getHistory();
-      return res.data.data;
+      return res.data.data.items;
     },
     staleTime: 30_000,
   });

@@ -34,7 +34,7 @@ export default function MenuPage() {
     queryKey: ['menu'],
     staleTime: 60_000,
     queryFn: async () => {
-      const r = await menuApi.getAll();
+      const r = await menuApi.getPublic();
       const cats = r.data.data ?? r.data;
       return Array.isArray(cats) ? cats : [];
     },

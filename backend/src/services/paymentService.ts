@@ -54,10 +54,10 @@ export async function createSafepaySession(
   orderNumber: string,
   amountPKR: number
 ): Promise<SafepaySession> {
-  const secretKey = process.env.SAFEPAY_SECRET_KEY;
+  const secretKey = process.env.SAFEPAY_API_KEY ?? process.env.SAFEPAY_SECRET_KEY;
   if (!secretKey) {
     throw new Error(
-      'SAFEPAY_SECRET_KEY not set. Get it from getsafepay.com Dashboard → Developers → API Keys'
+      'SAFEPAY_API_KEY not set. Get it from getsafepay.com Dashboard → Developers → API Keys (format: sec_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)'
     );
   }
 
@@ -67,7 +67,7 @@ export async function createSafepaySession(
     ? 'https://sandbox.api.getsafepay.com'
     : 'https://api.getsafepay.com';
   const checkoutBase = isSandbox
-    ? 'https://sandbox.getsafepay.com'
+    ? 'https://sandbox.api.getsafepay.com'
     : 'https://getsafepay.com';
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
@@ -75,22 +75,19 @@ export async function createSafepaySession(
   // ── Step 1: Init payment to get tracker token ──────
   //
   // POST /order/v1/init
-  // Headers: Content-Type + X-SFPY-MERCHANT-SECRET
-  // Body: { currency: "PKR", amount: <paisa> }
-  // Response: { data: { token: "tracker_xxx" }, status: { code: 1 } }
-  //
-  // Safepay amounts are in PAISA (1 PKR = 100 paisa)
-  const amountPaisa = Math.round(amountPKR * 100);
-
+  // Body: { client, environment, currency, amount }
+  //   client      — API key from Dashboard (format: sec_uuid)
+  //   environment — "sandbox" or "production"
+  //   amount      — in PKR (e.g. 1500.00)
+  // Response: { data: { token: "tracker_xxx" } }
   const initResponse = await fetch(`${apiBase}/order/v1/init`, {
     method: 'POST',
-    headers: {
-      'Content-Type':          'application/json',
-      'X-SFPY-MERCHANT-SECRET': secretKey,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      currency: 'PKR',
-      amount:   amountPaisa,
+      client:      secretKey,
+      environment: env,
+      currency:    'PKR',
+      amount:      amountPKR,
     }),
   });
 
@@ -108,23 +105,16 @@ export async function createSafepaySession(
 
   // ── Step 2: Build checkout URL ─────────────────────
   //
-  // Customer is redirected here to complete payment.
-  // After payment: Safepay redirects to success_redirect_url.
-  // On cancel:     Safepay redirects to cancel_redirect_url.
-  //
-  // We embed orderId in the redirect URLs so the success page
-  // knows which order to display.
+  // Redirect customer to /components on the checkout base.
+  // Params: env, beacon (tracker token), source, order_id,
+  //         success_url, cancel_url
   const params = new URLSearchParams({
-    tracker,
-    // Sandbox flag — REMOVE this param for production
-    ...(isSandbox ? { environment: 'sandbox' } : {}),
-    source:               'custom',
-    // These tell Safepay where to send the customer after payment
-    // Note: Safepay appends ?tracker=TOKEN&ref=REF to these URLs
-    success_redirect_url: `${frontendUrl}/customer/orders?payment=success&order=${orderId}`,
-    cancel_redirect_url:  `${frontendUrl}/customer/cart?payment=cancelled`,
-    // Optional: embed order reference for Safepay dashboard
-    order_id: orderNumber,
+    env,
+    beacon:      tracker,
+    source:      'custom',
+    order_id:    orderNumber,
+    redirect_url: `${frontendUrl}/customer/orders?payment=success&order=${orderId}`,
+    cancel_url:   `${frontendUrl}/customer/cart?payment=cancelled`,
   });
 
   const checkoutUrl = `${checkoutBase}/checkout/pay?${params.toString()}`;

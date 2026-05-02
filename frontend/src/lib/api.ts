@@ -1,124 +1,110 @@
-import axios from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  timeout: 15000,
-});
+// ─── Silent refresh helper ─────────────────────────────
+// On 401, attempts to rotate the refresh token and retry the original request.
+// Falls back to redirect if refresh fails.
 
-// Attach JWT from cookie on every request
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('ch_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+interface PanelConfig {
+  tokenCookie:   string;
+  refreshCookie: string;
+  loginPath:     string;
+}
 
-// Handle 401 → redirect to login
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      Cookies.remove('ch_token');
-      Cookies.remove('ch_role');
-      if (typeof window !== 'undefined') {
-        const role = localStorage.getItem('ch_role') ?? 'customer';
-        const loginPath =
-          role === 'customer' ? '/customer/login' :
-          role === 'cashier'  ? '/counter/login'  :
-          `/${role}/login`;
-        window.location.href = loginPath;
+const refreshQueues = new Map<string, Promise<string | null>>();
+
+async function attemptRefresh(panel: PanelConfig): Promise<string | null> {
+  const refreshToken = Cookies.get(panel.refreshCookie);
+  if (!refreshToken) return null;
+
+  // Deduplicate concurrent refresh calls for the same panel
+  const inflight = refreshQueues.get(panel.tokenCookie);
+  if (inflight) return inflight;
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Refresh timeout')), 15_000)
+  );
+
+  const promise = Promise.race([
+    axios
+      .post(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken })
+      .then((res) => {
+        const { token, refreshToken: newRefresh } = res.data.data;
+        const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        Cookies.set(panel.tokenCookie, token, { expires: 1, sameSite: 'lax', path: '/', secure });
+        Cookies.set(panel.refreshCookie, newRefresh, { expires: 7, sameSite: 'lax', path: '/', secure });
+        return token as string;
+      }),
+    timeout,
+  ])
+    .catch(() => null)
+    .finally(() => { refreshQueues.delete(panel.tokenCookie); });
+
+  refreshQueues.set(panel.tokenCookie, promise);
+  return promise;
+}
+
+function setupInterceptors(instance: AxiosInstance, panel: PanelConfig, skipAuthEndpoints = false) {
+  instance.interceptors.request.use((config) => {
+    const token = Cookies.get(panel.tokenCookie);
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+
+  instance.interceptors.response.use(
+    (res) => res,
+    async (err) => {
+      const originalRequest = err.config as InternalAxiosRequestConfig & { _retried?: boolean };
+
+      if (err.response?.status === 401 && !originalRequest._retried) {
+        // Skip refresh for auth endpoints (login forms handle their own 401s)
+        if (skipAuthEndpoints) {
+          const url = originalRequest.url ?? '';
+          if (url.includes('/auth/login') || url.includes('/auth/send-otp') ||
+              url.includes('/auth/verify-otp') || url.includes('/auth/register')) {
+            return Promise.reject(err);
+          }
+        }
+
+        originalRequest._retried = true;
+        const newToken = await attemptRefresh(panel);
+        if (newToken) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return instance(originalRequest);
+        }
+
+        // Refresh failed — clear cookies and redirect
+        Cookies.remove(panel.tokenCookie, { path: '/' });
+        Cookies.remove(panel.refreshCookie, { path: '/' });
+        if (typeof window !== 'undefined') window.location.href = panel.loginPath;
       }
+      return Promise.reject(err);
     }
-    return Promise.reject(err);
-  }
-);
+  );
+}
+
+// ─── Customer (default) instance ────────────────────────
+const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL, timeout: 15000 });
+setupInterceptors(api, { tokenCookie: 'ch_token', refreshCookie: 'ch_refresh', loginPath: '/customer/login' }, true);
 
 export { api };
 export default api;
 
-// ─── Delivery panel — isolated axios instance ──────────
-// Uses ch_delivery_token so it never contaminates other panels
-const deliveryApi_http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  timeout: 15000,
-});
-deliveryApi_http.interceptors.request.use((config) => {
-  const token = Cookies.get('ch_delivery_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-deliveryApi_http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      Cookies.remove('ch_delivery_token');
-      if (typeof window !== 'undefined') window.location.href = '/delivery/login';
-    }
-    return Promise.reject(err);
-  }
-);
-// ─── Kitchen panel — isolated axios instance ────────────
-const kitchenApi_http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  timeout: 15000,
-});
-kitchenApi_http.interceptors.request.use((config) => {
-  const token = Cookies.get('ch_kitchen_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-kitchenApi_http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      Cookies.remove('ch_kitchen_token');
-      if (typeof window !== 'undefined') window.location.href = '/kitchen/login';
-    }
-    return Promise.reject(err);
-  }
-);
-// ─── Admin panel — isolated axios instance ────────────
-const adminApi_http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  timeout: 15000,
-});
-adminApi_http.interceptors.request.use((config) => {
-  const token = Cookies.get('ch_admin_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-adminApi_http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      Cookies.remove('ch_admin_token');
-      if (typeof window !== 'undefined') window.location.href = '/admin/login';
-    }
-    return Promise.reject(err);
-  }
-);
-// ─── Counter panel — isolated axios instance ──────────
-const counterApi_http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  timeout: 15000,
-});
-counterApi_http.interceptors.request.use((config) => {
-  const token = Cookies.get('ch_counter_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-counterApi_http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      Cookies.remove('ch_counter_token');
-      if (typeof window !== 'undefined') window.location.href = '/counter/login';
-    }
-    return Promise.reject(err);
-  }
-);
+// ─── Delivery panel ─────────────────────────────────────
+const deliveryApi_http = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL, timeout: 15000 });
+setupInterceptors(deliveryApi_http, { tokenCookie: 'ch_delivery_token', refreshCookie: 'ch_delivery_refresh', loginPath: '/delivery/login' });
+
+// ─── Kitchen panel ──────────────────────────────────────
+const kitchenApi_http = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL, timeout: 15000 });
+setupInterceptors(kitchenApi_http, { tokenCookie: 'ch_kitchen_token', refreshCookie: 'ch_kitchen_refresh', loginPath: '/kitchen/login' });
+
+// ─── Admin panel ────────────────────────────────────────
+const adminApi_http = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL, timeout: 15000 });
+setupInterceptors(adminApi_http, { tokenCookie: 'ch_admin_token', refreshCookie: 'ch_admin_refresh', loginPath: '/admin/login' });
+
+// ─── Counter panel ──────────────────────────────────────
+const counterApi_http = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL, timeout: 15000 });
+setupInterceptors(counterApi_http, { tokenCookie: 'ch_counter_token', refreshCookie: 'ch_counter_refresh', loginPath: '/counter/login' });
 
 
 // ─── Typed helpers ────────────────────────────
@@ -166,13 +152,6 @@ export const menuApi = {
 };
 
 // TODO: backend endpoints not yet implemented
-export const modifierGroupApi = {
-  getAll: () => api.get('/menu/modifier-groups'),
-  create: (data: any) => api.post('/menu/modifier-groups', data),
-  update: (id: string, data: any) => api.patch(`/menu/modifier-groups/${id}`, data),
-  remove: (id: string) => api.delete(`/menu/modifier-groups/${id}`),
-};
-
 export const orderApi = {
   create: (data: any) => api.post('/orders', data),
   getMyOrders: () => api.get('/orders'),
@@ -185,9 +164,9 @@ export const addressApi = {
   create:     (data: any)                 => api.post('/addresses', data),
   update:     (id: string, data: any)     => api.patch(`/addresses/${id}`, data),
   remove:     (id: string)                => api.delete(`/addresses/${id}`),
-  setDefault: (id: string)                => api.patch(`/addresses/${id}/set-default`),
+  setDefault: (id: string)                => api.patch(`/addresses/${id}/default`),
   saveGps:    (data: { latitude: number; longitude: number; addressText: string }) =>
-    api.post('/addresses/save-gps', data),
+    api.post('/addresses/gps', data),
 };
 
 export const paymentApi = {
@@ -237,6 +216,18 @@ export const deliveryApi = {
   getProfile:   ()                        => deliveryApi_http.get('/delivery/profile'),
   updateProfile:(data: Record<string, any>) =>
     deliveryApi_http.patch('/delivery/profile', data),
+  uploadDocument: (file: File, field: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('field', field);
+    return deliveryApi_http.post('/delivery/upload-document', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Live location
+  updateLocation: (lat: number, lng: number) =>
+    deliveryApi_http.patch('/delivery/location', { lat, lng }),
 
   // COD wallet
   getCOD:       ()                        => deliveryApi_http.get('/delivery/cod'),

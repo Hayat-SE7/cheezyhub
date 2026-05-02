@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDeliveryStore } from '@/store/deliveryStore';
 import { deliveryApi } from '@/lib/api';
@@ -19,6 +19,7 @@ export default function DeliveryLoginPage() {
   const [step, setStep]         = useState<'username' | 'pin'>('username');
   const [loading, setLoading]   = useState(false);
   const [shake, setShake]       = useState(false);
+  const submittingRef           = useRef(false);
 
   useEffect(() => {
     // Only redirect if both the store AND the cookie are valid.
@@ -38,6 +39,8 @@ export default function DeliveryLoginPage() {
 
   const handleLogin = async (enteredPin: string) => {
     if (!username.trim()) { toast.error('Enter your username first'); return; }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     try {
       const res  = await deliveryApi.login({ identifier: username.trim(), pin: enteredPin });
@@ -49,7 +52,7 @@ export default function DeliveryLoginPage() {
         setTimeout(() => setShake(false), 500);
         return;
       }
-      login(data.token, data.user);
+      login(data.token, data.user, data.refreshToken);
       toast.success(`Welcome back, ${data.user.fullName ?? data.user.username}!`);
       router.replace('/delivery');
     } catch (err: any) {
@@ -59,6 +62,7 @@ export default function DeliveryLoginPage() {
       toast.error(err.response?.data?.error ?? 'Invalid credentials');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -168,7 +172,7 @@ export default function DeliveryLoginPage() {
             </div>
 
             {loading && (
-              <div className="flex justify-center">
+              <div className="flex justify-center" role="status" aria-label="Logging in">
                 <div className="w-5 h-5 border-2 border-lime-400/30 border-t-lime-400 rounded-full animate-spin" />
               </div>
             )}

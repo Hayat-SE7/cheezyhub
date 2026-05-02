@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Package, Wallet, User, CalendarDays,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import toast from 'react-hot-toast';
 
 const NAV = [
@@ -76,7 +77,7 @@ export default function DeliveryLayout({ children }: { children: React.ReactNode
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-20">
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
 
       {/* Bottom nav */}

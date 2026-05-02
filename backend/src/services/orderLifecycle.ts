@@ -9,7 +9,7 @@ import { prisma } from '../config/db';
 import { sseManager } from './sseManager';
 import { whatsappService } from './whatsapp';
 import { AppError } from '../middleware/errorHandler';
-import { assignDriver } from './assignmentService';
+import { assignDriver, retryPendingAssignments } from './assignmentService';
 
 // ─── Legal Transitions Per Role ──────────────────────
 //
@@ -146,13 +146,33 @@ export async function applyStatusChange(
     }
   }
 
-  // 8. Auto-complete: delivered → completed (+ increment COD wallet)
+  // 8. Auto-complete: delivered → completed (+ increment COD wallet + release driver)
   if (newStatus === 'delivered') {
-    if (updated.paymentMethod === 'cash' && updated.driverId) {
+    if (updated.driverId) {
+      const staffUpdate: any = {
+        activeOrderCount: { decrement: 1 },
+        driverStatus: 'AVAILABLE',
+        totalDeliveries: { increment: 1 },
+        todayDeliveries: { increment: 1 },
+      };
+      if (updated.paymentMethod === 'cash') {
+        staffUpdate.codPending = { increment: updated.total };
+      }
       await prisma.staff.update({
         where: { id: updated.driverId },
-        data: { codPending: { increment: updated.total } },
+        data: staffUpdate,
       });
+
+      // Notify driver frontend to update local state immediately
+      sseManager.sendToDriver(updated.driverId, 'DRIVER_STATUS_CHANGED', {
+        driverStatus: 'AVAILABLE',
+        codPending: updated.paymentMethod === 'cash' ? updated.total : 0,
+      });
+
+      // Driver is now free — try to assign any orders stuck in 'ready'
+      retryPendingAssignments().catch((err) =>
+        console.error('[orderLifecycle] retryPendingAssignments failed:', err)
+      );
     }
     return applyStatusChange(orderId, 'completed', 'system');
   }

@@ -9,9 +9,10 @@
 //  ✅ All Phase 1 POS features preserved
 // ─────────────────────────────────────────────────────────────────
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineQueueStore } from '@/store/offlineQueueStore';
+import { useCounterSSE } from '@/hooks/useCounterSSE';
 import { counterApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
@@ -66,9 +67,6 @@ export default function CounterPage() {
   const [selectedMods,  setSelectedMods]  = useState<Record<string, string[]>>({});
   const [qty,           setQty]           = useState(1);
 
-  // SSE for menu updates
-  const sseRef = useRef<EventSource | null>(null);
-
   const loadMenu = useCallback(() => {
     counterApi.getMenu()
       .then((r) => {
@@ -82,21 +80,13 @@ export default function CounterPage() {
 
   useEffect(() => { loadMenu(); }, []);
 
-  // Counter SSE — listen for menu_updated
-  useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
-    const Cookies = require('js-cookie');
-    const token   = Cookies.get('ch_counter_token');
-    if (!token) return;
-
-    const es = new EventSource(`${apiBase}/counter/sse?token=${token}`);
-    sseRef.current = es;
-    es.addEventListener('menu_updated', () => {
+  // SSE — reuse the shared hook (retry, debounce built in)
+  useCounterSSE({
+    onMenuInvalidate: () => {
       toast('Menu updated — refreshing', { icon: '🔄', duration: 2000 });
       loadMenu();
-    });
-    return () => es.close();
-  }, [loadMenu]);
+    },
+  });
 
   // ─── Cart helpers ─────────────────────────────────────────────
   const cartTotal = cart.reduce((s, l) => s + l.totalPrice, 0);

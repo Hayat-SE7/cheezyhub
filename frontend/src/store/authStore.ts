@@ -15,7 +15,7 @@ interface AuthState {
   user:            AuthUser | null;
   token:           string | null;
   isAuthenticated: boolean;
-  login:   (token: string, user: AuthUser, cookieName?: string) => void;
+  login:   (token: string, user: AuthUser, refreshToken?: string) => void;
   logout:  () => void;
   setUser: (user: AuthUser) => void;
 }
@@ -27,14 +27,15 @@ export const useAuthStore = create<AuthState>()(
       token:           null,
       isAuthenticated: false,
 
-      login: (token, user, cookieName = 'ch_token') => {
-        Cookies.set(cookieName, token, { expires: 7, sameSite: 'strict', path: '/' });
-        Cookies.set('ch_role', user.role, { expires: 7, sameSite: 'strict', path: '/' });
+      login: (token, user, refreshToken) => {
+        Cookies.set('ch_token', token, { expires: 1, sameSite: 'lax', path: '/', secure: window.location.protocol === 'https:' });
+        Cookies.set('ch_role', user.role, { expires: 7, sameSite: 'lax', path: '/', secure: window.location.protocol === 'https:' });
+        if (refreshToken) Cookies.set('ch_refresh', refreshToken, { expires: 7, sameSite: 'lax', path: '/', secure: window.location.protocol === 'https:' });
         set({ token, user, isAuthenticated: true });
       },
 
       logout: () => {
-        ['ch_token', 'ch_kitchen_token', 'ch_admin_token', 'ch_delivery_token', 'ch_counter_token', 'ch_role'].forEach(c => {
+        ['ch_token', 'ch_refresh', 'ch_role'].forEach(c => {
           Cookies.remove(c, { path: '/' });
         });
         set({ token: null, user: null, isAuthenticated: false });

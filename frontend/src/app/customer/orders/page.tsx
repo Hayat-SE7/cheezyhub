@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 interface OrderItem {
   id: string;
+  menuItemId: string;
   menuItemName: string;
   quantity: number;
   unitPrice: number;
@@ -258,19 +259,32 @@ export default function CustomerOrdersPage() {
   const addItem = useCartStore((s) => s.addItem);
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
 
   const { data: orders = [], isLoading: loading } = useQuery<Order[]>({
     queryKey: ['my-orders'],
     enabled: isAuthenticated,
     queryFn: async () => {
       const res = await orderApi.getMyOrders();
-      return res.data.data;
+      const d = res.data.data;
+      return Array.isArray(d) ? d : d.items ?? [];
     },
   });
 
   useEffect(() => {
     if (!isAuthenticated) router.push('/customer/login');
   }, [isAuthenticated, router]);
+
+  // Detect redirect back from Safepay after successful payment
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    const orderId = params.get('order');
+    if (payment === 'success' && orderId) {
+      setVerifyingPayment(true);
+      window.history.replaceState({}, '', '/customer/orders');
+    }
+  }, []);
 
   // Live order tracking via SSE
   useSSE({
@@ -287,6 +301,15 @@ export default function CustomerOrdersPage() {
           });
         }
       },
+      PAYMENT_CONFIRMED: (data: any) => {
+        setVerifyingPayment(false);
+        queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+        router.push(`/customer/order-confirmed?order=${data.orderNumber}`);
+      },
+      PAYMENT_FAILED: (data: any) => {
+        setVerifyingPayment(false);
+        toast.error(`Payment failed: ${data.reason ?? 'Please try again.'}`, { duration: 6000 });
+      },
     },
   });
 
@@ -294,7 +317,7 @@ export default function CustomerOrdersPage() {
     let added = 0;
     for (const item of order.items) {
       addItem({
-        menuItemId: item.id,
+        menuItemId: item.menuItemId,
         name: item.menuItemName,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
@@ -321,6 +344,13 @@ export default function CustomerOrdersPage() {
   return (
     <div className="pt-5">
       <h1 className="font-display font-bold text-2xl text-[#f5d38e] mb-5">My Orders</h1>
+
+      {verifyingPayment && (
+        <div className="mb-4 flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
+          <div className="w-4 h-4 rounded-full border-2 border-amber-400 border-t-transparent animate-spin flex-shrink-0" />
+          <span className="text-amber-300 text-sm font-medium">Verifying your payment…</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-3">

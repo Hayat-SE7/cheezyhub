@@ -7,6 +7,7 @@ import { useKitchenStore } from '@/store/kitchenStore';
 import { LogOut, Wifi, WifiOff, UtensilsCrossed, History, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import Cookies from 'js-cookie';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function KitchenLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
@@ -80,7 +81,7 @@ export default function KitchenLayout({ children }: { children: React.ReactNode 
         })}
       </nav>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto"><ErrorBoundary>{children}</ErrorBoundary></main>
     </div>
   );
 }

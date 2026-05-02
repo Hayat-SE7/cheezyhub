@@ -116,7 +116,7 @@ dealsRouter.post('/admin', async (req: AuthenticatedRequest, res: Response) => {
       validFrom:     parsed.data.validFrom ? new Date(parsed.data.validFrom) : new Date(),
       validTo:       parsed.data.validTo   ? new Date(parsed.data.validTo)   : null,
       linkedItemIds: parsed.data.linkedItemIds as any,
-    },
+    } as any,
   });
   res.status(201).json({ success: true, data: deal });
 });

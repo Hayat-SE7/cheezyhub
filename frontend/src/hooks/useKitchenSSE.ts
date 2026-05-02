@@ -13,6 +13,7 @@ export function useKitchenSSE(handlers: Record<string, EventHandler>, enabled = 
   handlersRef.current = handlers;
   const listenersRef = useRef<Record<string, (e: MessageEvent) => void>>({});
   const retryRef     = useRef(0);
+  const lastEventIdRef = useRef<string | null>(null);
   const debouncerRef = useRef<ReturnType<typeof createEventDebouncer> | null>(null);
   if (!debouncerRef.current) {
     debouncerRef.current = createEventDebouncer((event, data) => {
@@ -20,19 +21,39 @@ export function useKitchenSSE(handlers: Record<string, EventHandler>, enabled = 
     }, 150);
   }
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     const token = Cookies.get('ch_kitchen_token');
     if (!token || !enabled) return;
     esRef.current?.close();
-    const es = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/sse/connect?token=${token}`);
+
+    let url: string;
+    try {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sse/ticket`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await resp.json();
+      if (json.success && json.data?.ticket) {
+        url = `${process.env.NEXT_PUBLIC_API_URL}/sse/connect?ticket=${json.data.ticket}`;
+      } else {
+        url = `${process.env.NEXT_PUBLIC_API_URL}/sse/connect?token=${token}`;
+      }
+    } catch {
+      url = `${process.env.NEXT_PUBLIC_API_URL}/sse/connect?token=${token}`;
+    }
+    if (lastEventIdRef.current) url += `&lastEventId=${lastEventIdRef.current}`;
+
+    const es = new EventSource(url);
     esRef.current = es;
 
     const register = () => {
       for (const event of Object.keys(handlersRef.current)) {
         if (listenersRef.current[event]) continue;
         const wrapper = (e: MessageEvent) => {
-          try { debouncerRef.current!.fire(event, JSON.parse(e.data)); }
-          catch { console.warn(`[KitchenSSE] bad parse on "${event}"`); }
+          try {
+            if (e.lastEventId) lastEventIdRef.current = e.lastEventId;
+            debouncerRef.current!.fire(event, JSON.parse(e.data));
+          } catch { console.warn(`[KitchenSSE] bad parse on "${event}"`); }
         };
         listenersRef.current[event] = wrapper;
         es.addEventListener(event, wrapper);

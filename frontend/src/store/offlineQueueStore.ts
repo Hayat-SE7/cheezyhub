@@ -87,7 +87,10 @@ export const useOfflineQueueStore = create<OfflineQueueState>((setState, getStat
   enqueue: async (item) => {
     const current = getState().items;
     const active  = current.filter((i) => i.status !== 'failed').length;
-    if (active >= QUEUE_CAP) return null;
+    if (active >= QUEUE_CAP) {
+      // Return structured rejection so callers can show feedback
+      return null; // callers should check isFull() and show toast
+    }
 
     const entry: QueuedOrder = {
       ...item,

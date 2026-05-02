@@ -29,7 +29,7 @@ export function authenticate(
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as {
       userId: string;
       role: string;
     };

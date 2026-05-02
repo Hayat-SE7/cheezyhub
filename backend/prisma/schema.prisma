@@ -139,6 +139,9 @@ model Staff {
   verifiedAt         DateTime?
   verifiedBy         String?   // admin Staff id
   driverStatus       String    @default("OFFLINE")  // OFFLINE | AVAILABLE | ON_DELIVERY
+  liveLat            Float?
+  liveLng            Float?
+  lastLocationAt     DateTime?
   codPending         Float     @default(0)
   totalDeliveries    Int       @default(0)
   todayDeliveries    Int       @default(0)
@@ -152,6 +155,7 @@ model Staff {
   settlements     DriverSettlement[]
   holidayRequests HolidayRequest[]
 
+  @@index([role, isActive, driverStatus, verificationStatus])
   @@map("staff")
 }
 
@@ -161,6 +165,7 @@ model Category {
   id        String     @id @default(cuid())
   name      String     @unique
   sortOrder Int        @default(0)
+  deletedAt DateTime?
   items     MenuItem[]
 
   @@map("categories")
@@ -174,6 +179,7 @@ model MenuItem {
   imageUrl       String?
   isAvailable    Boolean         @default(true)
   sortOrder      Int             @default(0)
+  deletedAt      DateTime?
   categoryId     String
   category       Category        @relation(fields: [categoryId], references: [id])
   modifierGroups ModifierGroup[]
@@ -220,6 +226,8 @@ model Order {
   subtotal        Float
   deliveryFee     Float       @default(0)
   serviceCharge   Float       @default(0)
+  dealDiscount    Float       @default(0)
+  appliedDeals    Json        @default("[]")  // [{dealId, discountAmount}]
   total           Float
   deliveryAddress String      @default("")
   deliveryLat     Float?
@@ -230,6 +238,9 @@ model Order {
   paymentMethod   String      @default("cash")
   paymentStatus   String      @default("none")
   safepayTracker  String?
+
+  // Idempotency (prevent duplicate online orders from retries)
+  idempotencyKey  String?
 
   // Offline sync fields (Phase 12 — counter POS)
   offlineSync       Boolean   @default(false)
@@ -253,6 +264,11 @@ model Order {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  @@unique([idempotencyKey, customerId])
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([driverId])
+  @@index([cashierId])
   @@map("orders")
 }
 
@@ -294,17 +310,18 @@ model Shift {
   orders        Order[]
   ledgerEntries LedgerEntry[]
 
+  @@index([cashierId, status])
   @@map("shifts")
 }
 
 model LedgerEntry {
   id          String   @id @default(cuid())
   orderId     String   @unique
-  order       Order    @relation(fields: [orderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   cashierId   String
-  cashier     Staff    @relation(fields: [cashierId], references: [id])
+  cashier     Staff    @relation(fields: [cashierId], references: [id], onDelete: Restrict)
   shiftId     String?
-  shift       Shift?   @relation(fields: [shiftId], references: [id])
+  shift       Shift?   @relation(fields: [shiftId], references: [id], onDelete: Restrict)
   amount      Float
   method      String   @default("cash")  // cash | card | split
   cashAmount  Float?
@@ -312,6 +329,7 @@ model LedgerEntry {
   collectedAt DateTime @default(now())
   notes       String?
 
+  @@index([shiftId])
   @@map("ledger_entries")
 }
 
@@ -375,6 +393,7 @@ model DriverSettlement {
   settledBy       String                 // admin Staff id (NOT NULL in DB)
   createdAt       DateTime @default(now())
 
+  @@index([driverId])
   @@map("driver_settlements")
 }
 
@@ -393,6 +412,8 @@ model HolidayRequest {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@index([driverId])
+  @@index([status])
   @@map("holiday_requests")
 }
 
@@ -400,6 +421,7 @@ model HolidayRequest {
 
 model SystemSettings {
   id                    String  @id @default(cuid())
+  singleton             String  @unique @default("GLOBAL")
   deliveryFee           Float   @default(5.0)
   freeDeliveryThreshold Float   @default(0)
   serviceCharge         Float   @default(0.0)
@@ -486,6 +508,34 @@ model OfflineSyncLog {
   createdAt      DateTime @default(now())
 
   @@map("offline_sync_logs")
+}
+
+// ─── Refresh Tokens ─────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  role      String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─── Processed Webhooks (dedup layer) ────────────
+
+model ProcessedWebhook {
+  id        String   @id @default(cuid())
+  provider  String   // e.g. "safepay"
+  eventId   String   @unique // provider's unique event/tracker identifier
+  event     String   // event type e.g. "payment:created"
+  createdAt DateTime @default(now())
+
+  @@map("processed_webhooks")
 }
 
 // ─── Favourites ───────────────────────────────────

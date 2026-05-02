@@ -45,8 +45,8 @@ interface CounterState {
   user:            CounterUser | null;
   token:           string | null;
   isAuthenticated: boolean;
-  login:           (token: string, user: CounterUser) => void;
-  loginCounter:    (token: string, user: CounterUser) => void; // alias
+  login:           (token: string, user: CounterUser, refreshToken?: string) => void;
+  loginCounter:    (token: string, user: CounterUser, refreshToken?: string) => void; // alias
   logout:          () => void;
 
   // ── Cart ─────────────────────────────────────────────────────
@@ -87,15 +87,17 @@ export const useCounterStore = create<CounterState>()(
       token:           null,
       isAuthenticated: false,
 
-      login: (token, user) => {
-        Cookies.set('ch_counter_token', token, { expires: 1, sameSite: 'strict', path: '/' });
+      login: (token, user, refreshToken) => {
+        Cookies.set('ch_counter_token', token, { expires: 1, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
+        if (refreshToken) Cookies.set('ch_counter_refresh', refreshToken, { expires: 7, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
         set({ user, token, isAuthenticated: true });
       },
-      
-      loginCounter: (token, user) => get().login(token, user),
+
+      loginCounter: (token, user, refreshToken) => get().login(token, user, refreshToken),
 
       logout: () => {
         Cookies.remove('ch_counter_token', { path: '/' });
+        Cookies.remove('ch_counter_refresh', { path: '/' });
         set({ user: null, token: null, isAuthenticated: false, items: [], heldOrders: [] });
       },
 
@@ -105,7 +107,7 @@ export const useCounterStore = create<CounterState>()(
       theme:      'dark',
 
       addItem: (raw) => {
-        const id      = `${raw.menuItemId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const id      = crypto.randomUUID();
         const lineTotal = calcLineTotal(raw.basePrice, raw.selectedModifiers, raw.quantity);
         set((s) => ({ items: [...s.items, { ...raw, id, lineTotal }] }));
       },
@@ -157,6 +159,7 @@ export const useCounterStore = create<CounterState>()(
         user:            s.user,
         token:           s.token,
         isAuthenticated: s.isAuthenticated,
+        items:           s.items,
         heldOrders:      s.heldOrders,
         theme:           s.theme,
       }),

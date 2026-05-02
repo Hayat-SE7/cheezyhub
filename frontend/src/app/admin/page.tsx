@@ -61,7 +61,7 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
   );
 }
 
-const fmtRevenue = (v: number) => `$${v.toFixed(0)}`;
+const fmtRevenue = (v: number) => `Rs. ${v.toFixed(0)}`;
 const fmtDate   = (s: string) => { const d = new Date(s); return `${d.getMonth()+1}/${d.getDate()}`; };
 
 export default function AdminDashboard() {
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <StatCard icon={ShoppingBag} label="Total Orders" value={stats.totalOrders.toLocaleString()} color="#f59e0b" />
           <StatCard icon={Clock}       label="Today"        value={stats.todayOrders}                  color="#3b82f6" sub="orders placed" />
-          <StatCard icon={TrendingUp}  label="Revenue"      value={`$${(stats.totalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color="#10b981" sub="all time" />
+          <StatCard icon={TrendingUp}  label="Revenue"      value={`Rs. ${(stats.totalRevenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color="#10b981" sub="all time" />
           <StatCard icon={AlertCircle} label="Open Tickets" value={stats.openTickets}                  color="#ef4444" />
         </div>
       ) : (

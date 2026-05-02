@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { kitchenApi } from '@/lib/api';
 import { useKitchenSSE } from '@/hooks/useKitchenSSE';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { UtensilsCrossed } from 'lucide-react';
+import { UtensilsCrossed, WifiOff } from 'lucide-react';
+import { useKitchenStore } from '@/store/kitchenStore';
 
 interface OrderItem {
   id: string;
@@ -158,9 +159,14 @@ export default function KitchenPage() {
     },
   });
 
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const playAlert = useCallback(() => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
       [880, 660, 880].forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -206,6 +212,7 @@ export default function KitchenPage() {
     });
   }, [orders]);
 
+  const sseConnected  = useKitchenStore((s) => s.sseConnected);
   const pendingCount  = orders.filter((o) => o.status === 'pending').length;
   const cookingCount  = orders.filter((o) => o.status === 'preparing').length;
   const readyCount    = orders.filter((o) => o.status === 'ready').length;
@@ -216,6 +223,14 @@ export default function KitchenPage() {
 
   return (
     <div className="text-[#F2F2F5] p-4">
+      {/* SSE disconnection warning */}
+      {!sseConnected && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs font-semibold">
+          <WifiOff size={13} />
+          Live updates paused — reconnecting...
+        </div>
+      )}
+
       {/* Stats bar */}
       <div className="flex items-center gap-4 mb-4 px-1">
         <div className="text-xs text-[#4A4A58]">

@@ -3,30 +3,8 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Navigation, Pencil, X, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { addressApi } from '@/lib/api';
+import { reverseGeocode } from '@/lib/geocode';
 import toast from 'react-hot-toast';
-
-// ─── Reverse geocode using free Nominatim API ──────────
-async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    const data = await res.json();
-    const a = data.address ?? {};
-    const parts = [
-      a.house_number,
-      a.road || a.pedestrian || a.footway,
-      a.neighbourhood || a.suburb || a.quarter,
-      a.city || a.town || a.village || a.municipality,
-      a.state,
-      a.country,
-    ].filter(Boolean);
-    return parts.slice(0, 5).join(', ') || data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
-}
 
 // ─── Storage key — shown once per login session ────────
 const POPUP_KEY = 'ch_location_popup_shown';
@@ -80,8 +58,8 @@ export default function LocationPopup({ isAuthenticated }: Props) {
         const { latitude, longitude } = pos.coords;
         setLat(latitude);
         setLng(longitude);
-        const readable = await reverseGeocode(latitude, longitude);
-        setAddress(readable);
+        const geo = await reverseGeocode(latitude, longitude);
+        setAddress(geo.display);
         setStep('confirm');
       },
       (err) => {

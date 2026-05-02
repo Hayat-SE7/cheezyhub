@@ -51,7 +51,7 @@ export default function CounterLoginPage() {
         return;
       }
 
-      loginCounter(data.token, data.user);
+      loginCounter(data.token, data.user, data.refreshToken);
       toast.success(`Welcome, ${data.user.username ?? data.user.name ?? 'Cashier'}!`);
       router.push('/counter');
     } catch (err: any) {

@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
-import { orderApi, addressApi } from '@/lib/api';
+import { orderApi, addressApi, publicSettingsApi, paymentApi } from '@/lib/api';
 import Image from 'next/image';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { Minus, Plus, Trash2, ShoppingCart, MapPin, ChevronRight } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingCart, MapPin } from 'lucide-react';
 
 export default function CartPage() {
   const router   = useRouter();
@@ -17,8 +17,17 @@ export default function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [note,    setNote]    = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [fees, setFees] = useState<{ deliveryFee: number; freeDeliveryThreshold: number; serviceCharge: number } | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'safepay'>('cash');
 
-  // Fetch their default address on mount
+  // Fetch fees + default address on mount
+  useEffect(() => {
+    publicSettingsApi.getFees().then(res => {
+      const d = res.data.data;
+      setFees({ deliveryFee: d.deliveryFee ?? 150, freeDeliveryThreshold: d.freeDeliveryThreshold ?? 0, serviceCharge: d.serviceCharge ?? 0 });
+    }).catch(() => setFees({ deliveryFee: 150, freeDeliveryThreshold: 1500, serviceCharge: 0 }));
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
       addressApi.getAll().then(res => {
@@ -31,9 +40,19 @@ export default function CartPage() {
     }
   }, [isAuthenticated]);
 
+  // Detect redirect back from Safepay after user cancels
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'cancelled') {
+      toast.error('Payment was cancelled. Try again.');
+      window.history.replaceState({}, '', '/customer/cart');
+    }
+  }, []);
+
   const subtotal     = items.reduce((s, i) => s + i.totalPrice, 0);
-  const deliveryFee  = subtotal >= 1500 ? 0 : 150;
-  const total        = subtotal + deliveryFee;
+  const deliveryFee  = fees && fees.freeDeliveryThreshold > 0 && subtotal >= fees.freeDeliveryThreshold ? 0 : (fees?.deliveryFee ?? 150);
+  const serviceCharge = fees?.serviceCharge ?? 0;
+  const total        = subtotal + deliveryFee + serviceCharge;
 
   const handlePlaceOrder = async () => {
     if (!isAuthenticated) { router.push('/customer/login'); return; }
@@ -49,14 +68,19 @@ export default function CartPage() {
           menuItemId:          i.menuItemId,
           quantity:            i.quantity,
           selectedModifierIds: i.selectedModifiers.map((m) => m.id),
-          notes:               note || undefined, // applies to item
+          notes:               note || undefined,
         })),
         deliveryAddress: deliveryAddress.trim(),
-        notes: note || undefined, // overarching order note
+        notes: note || undefined,
       });
+      const { id: orderId, orderNumber } = res.data.data;
+      const payRes = await paymentApi.create(orderId, paymentMethod);
       clear();
-      const orderNum = res.data.data?.orderNumber ?? '';
-      router.push(`/customer/order-confirmed?order=${orderNum}`);
+      if (paymentMethod === 'cash') {
+        router.push(`/customer/order-confirmed?order=${orderNumber}`);
+      } else {
+        window.location.href = payRes.data.data.checkoutUrl;
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.error ?? 'Order failed. Please try again.');
     } finally { setPlacing(false); }
@@ -154,14 +178,46 @@ export default function CartPage() {
                 <span>Delivery</span>
                 <span className={deliveryFee === 0 ? 'text-emerald-400 font-semibold' : 'text-white'}>{deliveryFee === 0 ? 'Free' : `Rs. ${deliveryFee}`}</span>
               </div>
-              {deliveryFee > 0 && subtotal < 1500 && (
+              {deliveryFee > 0 && fees && fees.freeDeliveryThreshold > 0 && subtotal < fees.freeDeliveryThreshold && (
                 <p className="text-xs text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
-                  Add Rs. {(1500 - subtotal).toFixed(0)} more for free delivery
+                  Add Rs. {(fees.freeDeliveryThreshold - subtotal).toFixed(0)} more for free delivery
                 </p>
+              )}
+              {serviceCharge > 0 && (
+                <div className="flex justify-between text-[#a07850]">
+                  <span>Service charge</span>
+                  <span className="text-white">Rs. {serviceCharge}</span>
+                </div>
               )}
               <div className="border-t border-[#3d2a15] pt-2 flex justify-between font-bold text-white">
                 <span>Total</span>
                 <span className="text-amber-400">Rs. {total.toFixed(0)}</span>
+              </div>
+            </div>
+
+            {/* Payment method selector */}
+            <div>
+              <p className="text-xs font-semibold text-[#a07850] uppercase tracking-wider mb-2">Payment Method</p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: 'cash',    label: 'Cash on Delivery', icon: '💵' },
+                  { value: 'safepay', label: 'Pay Online',        icon: '💳' },
+                ] as const).map(({ value, label, icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPaymentMethod(value)}
+                    className={clsx(
+                      'flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-semibold transition-all',
+                      paymentMethod === value
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : 'bg-[#2d1e0f] border-[#4a3520] text-[#a07850] hover:border-amber-500/40'
+                    )}
+                  >
+                    <span className="text-lg">{icon}</span>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -170,7 +226,10 @@ export default function CartPage() {
               disabled={placing}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-display font-bold text-base shadow-md shadow-amber-400/20 transition-all disabled:opacity-60"
             >
-              {placing ? 'Placing order…' : !isAuthenticated ? 'Login to Order' : `Place Order · Rs. ${total.toFixed(0)}`}
+              {placing ? 'Placing order…'
+                : !isAuthenticated ? 'Login to Order'
+                : paymentMethod === 'safepay' ? `Pay with Safepay · Rs. ${total.toFixed(0)}`
+                : `Place Order · Rs. ${total.toFixed(0)}`}
             </button>
 
             <button onClick={clear} className="w-full text-center text-xs text-[#a07850] hover:text-red-400 transition-colors">

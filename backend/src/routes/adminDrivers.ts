@@ -257,12 +257,36 @@ adminDriverRouter.patch('/holiday-requests/:id', async (req: AuthenticatedReques
     data:  { status: newStatus as any, reviewedBy: req.user!.userId, reviewNote: note ?? null },
   });
 
+  // If approved, enforce: set driver OFFLINE and check for active order conflicts
+  if (action === 'approve') {
+    const driver = await prisma.staff.findUnique({
+      where: { id: request.driverId },
+      select: { driverStatus: true, activeOrderCount: true },
+    });
+
+    await prisma.staff.update({
+      where: { id: request.driverId },
+      data: { driverStatus: 'OFFLINE' },
+    });
+
+    sseManager.sendToDriver(request.driverId, 'DRIVER_STATUS_CHANGED', {
+      driverStatus: 'OFFLINE',
+    });
+
+    if (driver && driver.activeOrderCount > 0) {
+      sseManager.broadcastToAdmin('HOLIDAY_CONFLICT', {
+        driverId: request.driverId,
+        message: `Driver has ${driver.activeOrderCount} active order(s) during approved holiday. Please reassign.`,
+      });
+    }
+  }
+
   sseManager.sendToDriver(request.driverId, 'HOLIDAY_REQUEST_REVIEWED', {
     status:   newStatus,
     fromDate: request.fromDate,
     toDate:   request.toDate,
     message:  action === 'approve'
-      ? 'Your holiday request has been approved!'
+      ? 'Your holiday request has been approved! You have been set to offline.'
       : `Holiday request rejected: ${note ?? 'Contact admin.'}`,
   });
 

@@ -40,14 +40,23 @@ kitchenRouter.get('/orders', async (_req: AuthenticatedRequest, res: Response) =
 // ─── GET /api/kitchen/orders/history ─────────────────
 //     Completed orders (for review)
 
-kitchenRouter.get('/orders/history', async (_req: AuthenticatedRequest, res: Response) => {
-  const orders = await prisma.order.findMany({
-    where: { status: { in: ['completed', 'cancelled'] } },
-    include: { items: true },
-    orderBy: { updatedAt: 'desc' },
-    take: 100,
-  });
-  res.json({ success: true, data: orders });
+kitchenRouter.get('/orders/history', async (req: AuthenticatedRequest, res: Response) => {
+  const page  = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+  const skip  = (page - 1) * limit;
+
+  const where = { status: { in: [OrderStatus.completed, OrderStatus.cancelled] } };
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      include: { items: true },
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.order.count({ where }),
+  ]);
+  res.json({ success: true, data: { items: orders, total, page, limit, totalPages: Math.ceil(total / limit) } });
 });
 
 // ─── PATCH /api/kitchen/orders/:id/status ─────────────

@@ -14,11 +14,11 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
-import { sseManager } from '../services/sseManager';
-import { whatsappService } from '../services/whatsapp';
 import { validateAndPriceOrder } from '../services/inventoryService';
 import { checkDeliveryRadius, isRadiusConfigured } from '../services/radiusService';
+import { validateDeals } from '../services/dealsService';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../config/logger';
 
 export const orderRouter = Router();
 
@@ -36,6 +36,7 @@ function generateOrderNumber(): string {
 // ─── Validation Schema ────────────────────────────────
 
 const placeOrderSchema = z.object({
+  idempotencyKey: z.string().min(1).optional(),
   items: z
     .array(
       z.object({
@@ -50,6 +51,7 @@ const placeOrderSchema = z.object({
   deliveryLat: z.number().optional(),
   deliveryLng: z.number().optional(),
   notes: z.string().max(500).optional(),
+  dealIds: z.array(z.string()).default([]),
 });
 
 // ─── POST /api/orders ─────────────────────────────────
@@ -67,7 +69,7 @@ orderRouter.post(
       return;
     }
 
-    const { items, deliveryAddress, deliveryLat, deliveryLng, notes } = parsed.data;
+    const { idempotencyKey, items, deliveryAddress, deliveryLat, deliveryLng, notes, dealIds } = parsed.data;
 
     try {
       // 2. Load system settings
@@ -106,12 +108,23 @@ orderRouter.post(
 
       // 5. Validate inventory + calculate prices
       //    This throws descriptive errors if anything is unavailable
-      const { lines, subtotal } = await validateAndPriceOrder(items);
+      const { lines, subtotal } = await validateAndPriceOrder(items as any);
 
-      // 6. Apply fees
-      const deliveryFee = settings?.deliveryFee ?? 0;
+      // 6. Validate and apply deals (server-side enforcement)
+      let dealDiscount = 0;
+      let appliedDeals: { dealId: string; discountAmount: number }[] = [];
+      if (dealIds.length > 0) {
+        const dealResult = await validateDeals(dealIds, items as any, subtotal);
+        dealDiscount = dealResult.totalDiscount;
+        appliedDeals = dealResult.deals;
+      }
+
+      // 7. Apply fees (waive delivery if subtotal meets free-delivery threshold)
+      const rawFee = settings?.deliveryFee ?? 0;
+      const threshold = settings?.freeDeliveryThreshold ?? 0;
+      const deliveryFee = threshold > 0 && subtotal >= threshold ? 0 : rawFee;
       const serviceCharge = settings?.serviceCharge ?? 0;
-      const total = subtotal + deliveryFee + serviceCharge;
+      const total = subtotal - dealDiscount + deliveryFee + serviceCharge;
 
       // 7. Load customer details
       const customer = await prisma.user.findUnique({
@@ -120,58 +133,71 @@ orderRouter.post(
       });
       if (!customer) throw new AppError('Customer not found', 404);
 
-      // 8. Create order in database (atomic transaction)
-      const order = await prisma.order.create({
-        data: {
-          orderNumber: generateOrderNumber(),
-          orderType: 'delivery', // customer app only places delivery orders
-          customerId: req.user!.userId,
-          deliveryAddress,
-          deliveryLat,
-          deliveryLng,
-          notes,
-          subtotal,
-          deliveryFee,
-          serviceCharge,
-          total,
-          status: 'pending',
-          items: {
-            create: lines.map((line) => ({
-              menuItemId: line.menuItemId,
-              menuItemName: line.menuItemName,
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              totalPrice: line.totalPrice,
-              notes: line.notes,
-              selectedModifiers: line.selectedModifiers as any,
-            })),
+      // 8. Create order atomically with idempotency check inside transaction
+      const order = await prisma.$transaction(async (tx) => {
+        // Idempotency check inside transaction to prevent race condition
+        if (idempotencyKey) {
+          const existing = await tx.order.findFirst({
+            where: { idempotencyKey, customerId: req.user!.userId },
+            select: { id: true, orderNumber: true },
+          });
+          if (existing) {
+            return { _duplicate: true as const, ...existing };
+          }
+        }
+
+        return tx.order.create({
+          data: {
+            orderNumber: generateOrderNumber(),
+            orderType: 'delivery',
+            customerId: req.user!.userId,
+            idempotencyKey: idempotencyKey ?? null,
+            deliveryAddress,
+            deliveryLat,
+            deliveryLng,
+            notes,
+            subtotal,
+            dealDiscount,
+            appliedDeals: appliedDeals as any,
+            deliveryFee,
+            serviceCharge,
+            total,
+            status: 'pending',
+            items: {
+              create: lines.map((line) => ({
+                menuItemId: line.menuItemId,
+                menuItemName: line.menuItemName,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                totalPrice: line.totalPrice,
+                notes: line.notes,
+                selectedModifiers: line.selectedModifiers as any,
+              })),
+            },
           },
-        },
-        include: { 
-          items: true, 
-          customer: { select: { id: true, name: true, mobile: true } } 
-        },
+          include: {
+            items: true,
+            customer: { select: { id: true, name: true, mobile: true } }
+          },
+        });
       });
 
-      // 9. Broadcast new order to kitchen + admin via SSE
-      sseManager.broadcastToKitchen('ORDER_CREATED', order);
-      sseManager.broadcastToAdmin('ORDER_CREATED', order);
-
-      // 10. WhatsApp: ORDER_CONFIRMED
-      if (customer.mobile) {
-        await whatsappService.send('ORDER_CONFIRMED', customer.mobile, {
-          orderNumber: order.orderNumber,
-          customerName: customer.name,
-          total,
-        });
+      if ('_duplicate' in order) {
+        res.status(409).json({ success: false, error: 'Duplicate order', data: { id: order.id, orderNumber: order.orderNumber } });
+        return;
       }
+
+      // NOTE: Do NOT broadcast ORDER_CREATED or send WhatsApp here.
+      // The payments route handles broadcasting after payment is confirmed
+      // (instant for COD, after webhook for Safepay). This prevents the
+      // kitchen from seeing orders that haven't been paid for yet.
 
       res.status(201).json({ success: true, data: order });
     } catch (err) {
       if (err instanceof AppError) {
         res.status(err.statusCode).json({ success: false, error: err.message });
       } else {
-        console.error('[Orders] Unexpected error:', err);
+        logger.error({ err }, 'Order placement failed');
         res.status(500).json({ success: false, error: 'Failed to place order' });
       }
     }
@@ -185,12 +211,22 @@ orderRouter.get(
   '/',
   requireRole('customer'),
   async (req: AuthenticatedRequest, res: Response) => {
-    const orders = await prisma.order.findMany({
-      where: { customerId: req.user!.userId },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ success: true, data: orders });
+    const page  = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip  = (page - 1) * limit;
+
+    const where = { customerId: req.user!.userId };
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.order.count({ where }),
+    ]);
+    res.json({ success: true, data: { items: orders, total, page, limit, totalPages: Math.ceil(total / limit) } });
   }
 );
 

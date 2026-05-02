@@ -24,11 +24,13 @@ interface DeliveryState {
   user:            DeliveryUser | null;
   token:           string | null;
   isAuthenticated: boolean;
+  sseConnected:    boolean;
 
-  login:  (token: string, user: DeliveryUser) => void;
+  login:  (token: string, user: DeliveryUser, refreshToken?: string) => void;
   logout: () => void;
   updateStatus: (driverStatus: DeliveryUser['driverStatus']) => void;
   updateUser:   (partial: Partial<DeliveryUser>) => void;
+  setSseConnected: (v: boolean) => void;
 }
 
 export const useDeliveryStore = create<DeliveryState>()(
@@ -37,14 +39,19 @@ export const useDeliveryStore = create<DeliveryState>()(
       user:            null,
       token:           null,
       isAuthenticated: false,
+      sseConnected:    false,
 
-      login: (token, user) => {
-        Cookies.set('ch_delivery_token', token, { expires: 7, sameSite: 'strict', path: '/' });
+      setSseConnected: (v) => set({ sseConnected: v }),
+
+      login: (token, user, refreshToken) => {
+        Cookies.set('ch_delivery_token', token, { expires: 1, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
+        if (refreshToken) Cookies.set('ch_delivery_refresh', refreshToken, { expires: 7, sameSite: 'strict', path: '/', secure: window.location.protocol === 'https:' });
         set({ token, user, isAuthenticated: true });
       },
 
       logout: () => {
-        Cookies.remove('ch_delivery_token');
+        Cookies.remove('ch_delivery_token', { path: '/' });
+        Cookies.remove('ch_delivery_refresh', { path: '/' });
         set({ token: null, user: null, isAuthenticated: false });
       },
 

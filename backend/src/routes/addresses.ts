@@ -109,7 +109,7 @@ addressRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
     await prisma.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
   }
 
-  const address = await prisma.address.create({ data: { ...data, userId } });
+  const address = await prisma.address.create({ data: { ...data, userId } as any });
 
   if (data.isGps && data.latitude && data.longitude) {
     await prisma.user.update({

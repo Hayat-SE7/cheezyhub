@@ -23,6 +23,7 @@ import {
   verifySafepayWebhook,
 } from '../services/paymentService';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../config/logger';
 
 export const paymentRouter = Router();
 
@@ -54,39 +55,45 @@ paymentRouter.post(
     const { orderId, paymentMethod } = parsed.data;
 
     try {
-      // Load and verify ownership
-const order = await prisma.order.findUnique({
-  where: { id: orderId },
-  include: {
-    payment: true,
-    customer: { select: { id: true, name: true, mobile: true } }
-  }
-});
+      // Atomic: load order + verify ownership + check no existing payment inside transaction
+      const order = await prisma.$transaction(async (tx) => {
+        const o = await tx.order.findUnique({
+          where: { id: orderId },
+          include: {
+            payment: true,
+            customer: { select: { id: true, name: true, mobile: true } }
+          }
+        });
 
-      if (!order) throw new AppError('Order not found', 404);
+        if (!o) throw new AppError('Order not found', 404);
+        if (o.customerId !== req.user!.userId) {
+          throw new AppError('You can only pay for your own orders', 403);
+        }
+        if (o.payment) {
+          throw new AppError('Payment already exists for this order', 409);
+        }
 
-      if (order.payment) {
-        throw new AppError('Payment already exists for this order', 409);
-      }
-
-      // ── Cash on Delivery ──────────────────────────────
-      if (paymentMethod === 'cash') {
-        await prisma.$transaction([
-          prisma.payment.create({
+        // ── Cash on Delivery ──────────────────────────────
+        if (paymentMethod === 'cash') {
+          await tx.payment.create({
             data: {
               orderId,
               method:   'cash',
-              amount:   order.total,
+              amount:   o.total,
               currency: 'PKR',
               status:   'paid',
             },
-          }),
-          prisma.order.update({
+          });
+          await tx.order.update({
             where: { id: orderId },
             data:  { paymentMethod: 'cash', paymentStatus: 'none' },
-          }),
-        ]);
+          });
+        }
 
+        return o;
+      });
+
+      if (paymentMethod === 'cash') {
         // COD is confirmed instantly — broadcast to kitchen
         const fullOrder = await prisma.order.findUnique({
           where:   { id: orderId },
@@ -95,7 +102,6 @@ const order = await prisma.order.findUnique({
         sseManager.broadcastToKitchen('ORDER_CREATED', fullOrder);
         sseManager.broadcastToAdmin('ORDER_CREATED', fullOrder);
 
-        // WhatsApp: ORDER_CONFIRMED (safe to fire now for COD)
         if (order.customer?.mobile) {
           await whatsappService.send('ORDER_CONFIRMED', order.customer!.mobile, {
             orderNumber:  order.orderNumber,
@@ -136,8 +142,6 @@ const order = await prisma.order.findUnique({
         }),
       ]);
 
-      // Do NOT broadcast to kitchen yet — wait for webhook confirmation
-
       res.json({
         success: true,
         data: {
@@ -150,7 +154,7 @@ const order = await prisma.order.findUnique({
       if (err instanceof AppError) {
         res.status(err.statusCode).json({ success: false, error: err.message });
       } else {
-        console.error('[Payments/create]', err);
+        logger.error({ err }, 'Payment creation failed');
         res.status(500).json({ success: false, error: 'Payment creation failed' });
       }
     }
@@ -185,7 +189,7 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
 
   if (provider === 'safepay') {
     if (!signature) {
-      console.error('[Safepay Webhook] Missing X-SFPY-SIGNATURE header');
+      logger.error('Safepay webhook: missing X-SFPY-SIGNATURE header');
       res.status(400).json({ error: 'Missing signature' });
       return;
     }
@@ -193,7 +197,7 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
     // req.body is a Buffer when registered with express.raw()
     const isValid = verifySafepayWebhook(req.body as Buffer, signature);
     if (!isValid) {
-      console.error('[Safepay Webhook] Invalid signature');
+      logger.error('Safepay webhook: invalid signature');
       res.status(400).json({ error: 'Invalid signature' });
       return;
     }
@@ -211,16 +215,35 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
     return;
   }
 
-  const event   = payload?.event;
-  const data    = payload?.data;
-  const tracker = data?.tracker;
+  // Safepay sends flat payload at root (not nested under "data")
+  // Real format: { tracker, state: "PAID"|"FAILED", reference, notification_id, amount, ... }
+  // Legacy/stub format: { event: "payment:created", data: { tracker, status, reference } }
+  const isLegacy = payload?.event !== undefined && payload?.data !== undefined;
 
-  console.log(`[Safepay Webhook] Event: ${event}  Tracker: ${tracker}`);
+  const tracker        = isLegacy ? payload?.data?.tracker    : payload?.tracker;
+  const state          = isLegacy ? payload?.data?.status     : payload?.state;
+  const reference      = isLegacy ? payload?.data?.reference  : payload?.reference;
+  const notificationId = isLegacy ? `${tracker}:${payload?.event}` : (payload?.notification_id ?? payload?.token ?? tracker);
+  const eventLabel     = isLegacy ? payload?.event : (state === 'PAID' ? 'payment:created' : 'payment:failed');
+
+  logger.info({ tracker, state, notificationId }, 'Safepay webhook received');
 
   // 3. Always ACK immediately — process async
   res.json({ received: true });
 
   if (!tracker) return;
+
+  // 4. Dedup: reject already-processed webhooks (create-first to avoid race)
+  const dedupeKey = notificationId ?? tracker;
+  try {
+    await prisma.processedWebhook.create({ data: { provider: 'safepay', eventId: dedupeKey, event: eventLabel ?? 'unknown' } });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      logger.info({ dedupeKey }, 'Safepay webhook duplicate ignored');
+      return;
+    }
+    throw err;
+  }
 
   try {
     // Find order by tracker token
@@ -230,13 +253,12 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
     });
 
     if (!order) {
-      console.error(`[Safepay Webhook] No order found for tracker: ${tracker}`);
+      logger.error({ tracker }, 'Safepay webhook: no order found for tracker');
       return;
     }
 
     // ── Payment confirmed ─────────────────────────────
-    if (event === 'payment:created' || data?.status === 'PAID') {
-      const reference = data?.reference ?? null;
+    if (state === 'PAID' || eventLabel === 'payment:created') {
 
       await prisma.$transaction([
         prisma.payment.update({
@@ -276,11 +298,11 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
         });
       }
 
-      console.log(`[Safepay Webhook] ✅ Payment confirmed: ${order.orderNumber}`);
+      logger.info({ orderNumber: order.orderNumber }, 'Payment confirmed');
     }
 
     // ── Payment failed ────────────────────────────────
-    else if (event === 'payment:failed' || data?.status === 'FAILED') {
+    else if (state === 'FAILED' || eventLabel === 'payment:failed') {
       await prisma.$transaction([
         prisma.payment.update({
           where: { orderId: order.id },
@@ -298,10 +320,10 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
         reason:      'Payment was not completed',
       });
 
-      console.log(`[Safepay Webhook] ❌ Payment failed: ${order.orderNumber}`);
+      logger.info({ orderNumber: order.orderNumber }, 'Payment failed');
     }
   } catch (err) {
-    console.error('[Safepay Webhook] Processing error:', err);
+    logger.error({ err }, 'Safepay webhook processing error');
     // Don't re-throw — we already sent 200
   }
 }
@@ -319,7 +341,7 @@ export async function safepayWebhookHandler(req: Request, res: Response): Promis
 //  This simulates what the Safepay webhook would do on success.
 // ─────────────────────────────────────────────────────
 
-paymentRouter.post('/stub-confirm', async (req: Request, res: Response) => {
+paymentRouter.post('/stub-confirm', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res: Response) => {
   if (process.env.NODE_ENV === 'production') {
     res.status(404).json({ error: 'Not found' });
     return;
@@ -387,7 +409,7 @@ paymentRouter.post('/stub-confirm', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[Stub Confirm] ✅ Payment confirmed for ${order.orderNumber}`);
+    logger.info({ orderNumber: order.orderNumber }, 'Stub payment confirmed');
 
     res.json({
       success: true,
@@ -395,7 +417,7 @@ paymentRouter.post('/stub-confirm', async (req: Request, res: Response) => {
       data:    { orderId, orderNumber: order.orderNumber, ref: fakeRef },
     });
   } catch (err: any) {
-    console.error('[Stub Confirm] Error:', err);
+    logger.error({ err }, 'Stub confirm error');
     res.status(500).json({ success: false, error: err?.message ?? 'Stub confirm failed' });
   }
 });

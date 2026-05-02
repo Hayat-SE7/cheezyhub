@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { prisma } from '../config/db';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { generateAndStoreOtp, verifyOtp, sendOtpViaSms } from '../services/otpService';
+import { generateAndStoreOtp, verifyOtp, verifyOtpViaTwilio, sendOtpViaSms } from '../services/otpService';
+import { issueTokenPair, rotateRefreshToken, revokeRefreshToken } from '../services/tokenService';
+import admin from '../config/firebaseAdmin';
 
 export const authRouter = Router();
 
@@ -42,16 +44,13 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         throw new AppError('Account suspended. Please contact support.', 403);
       }
 
-      const token = jwt.sign(
-        { userId: user.id, role: user.role },
-        process.env.JWT_SECRET!,
-        { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
-      );
+      const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
 
       res.json({
         success: true,
         data: {
-          token,
+          token: accessToken,
+          refreshToken,
           user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email, role: user.role },
         },
       });
@@ -67,16 +66,13 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
       await prisma.staff.update({ where: { id: staff.id }, data: { lastLoginAt: new Date() } });
 
-      const token = jwt.sign(
-        { userId: staff.id, role: staff.role },
-        process.env.JWT_SECRET!,
-        { expiresIn: '24h' }
-      );
+      const { accessToken, refreshToken } = await issueTokenPair(staff.id, staff.role);
 
       res.json({
         success: true,
         data: {
-          token,
+          token: accessToken,
+          refreshToken,
           user: {
             id:       staff.id,
             username: staff.username,
@@ -131,16 +127,13 @@ authRouter.post('/register', async (req: Request, res: Response) => {
       select: { id: true, name: true, mobile: true, email: true, role: true },
     });
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
+    const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
 
     res.status(201).json({
       success: true,
       data: {
-        token,
+        token: accessToken,
+        refreshToken,
         user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email, role: user.role },
       },
     });
@@ -178,7 +171,8 @@ authRouter.post('/send-otp', async (req: Request, res: Response) => {
     if (err instanceof AppError) {
       res.status(err.statusCode).json({ success: false, error: err.message });
     } else {
-      res.status(500).json({ success: false, error: 'Failed to send OTP' });
+      console.error('[Auth] OTP send unexpected error:', err);
+      res.status(500).json({ success: false, error: 'Failed to send OTP. Please try again later.' });
     }
   }
 });
@@ -199,8 +193,13 @@ authRouter.post('/verify-otp', async (req: Request, res: Response) => {
   const { mobile, otp } = parsed.data;
 
   try {
-    // verifyOtp: HMAC comparison, timing-safe, increments attempts, clears on success
-    await verifyOtp(mobile, otp);
+    // Use Twilio Verify's own check when that provider is active,
+    // otherwise use local HMAC-based verification
+    if (process.env.OTP_PROVIDER === 'twilio_verify') {
+      await verifyOtpViaTwilio(mobile, otp);
+    } else {
+      await verifyOtp(mobile, otp);
+    }
 
     // Find the now-verified user to create the verification token
     const user = await prisma.user.findFirst({ 
@@ -216,7 +215,7 @@ authRouter.post('/verify-otp', async (req: Request, res: Response) => {
     const verificationToken = jwt.sign(
       { userId: user.id, step: 'otp_verified' },
       process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
+      { algorithm: 'HS256', expiresIn: '15m' }
     );
 
     res.json({ success: true, data: { verificationToken } });
@@ -246,7 +245,7 @@ authRouter.post('/complete-registration', async (req: Request, res: Response) =>
 
   let payload: { userId: string; step: string };
   try {
-    payload = jwt.verify(verificationToken, process.env.JWT_SECRET!) as any;
+    payload = jwt.verify(verificationToken, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as any;
   } catch {
     res.status(400).json({ success: false, error: 'Verification token expired. Please verify your phone again.' });
     return;
@@ -264,16 +263,13 @@ authRouter.post('/complete-registration', async (req: Request, res: Response) =>
     select: { id: true, name: true, mobile: true, role: true },
   });
 
-  const token = jwt.sign(
-    { userId: user.id, role: user.role },
-    process.env.JWT_SECRET!,
-    { expiresIn: '7d' }
-  );
+  const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
 
   res.json({
     success: true,
     data: {
-      token,
+      token: accessToken,
+      refreshToken,
       user: { id: user.id, name: user.name, mobile: user.mobile, role: user.role },
     },
   });
@@ -307,26 +303,54 @@ authRouter.post('/login-pin', async (req: Request, res: Response) => {
     return;
   }
 
-  const token = jwt.sign(
-    { userId: user.id, role: user.role },
-    process.env.JWT_SECRET!,
-    { expiresIn: '7d' }
-  );
+  const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
 
   res.json({
     success: true,
     data: {
-      token,
+      token: accessToken,
+      refreshToken,
       user: { id: user.id, name: user.name, mobile: user.mobile, role: user.role },
     },
   });
 });
 
+// ─── POST /api/auth/refresh ──────────────────────────────────────
+// Rotate refresh token and issue new access + refresh pair
+authRouter.post('/refresh', async (req: Request, res: Response) => {
+  const { refreshToken: oldToken } = req.body;
+  if (!oldToken) {
+    res.status(400).json({ success: false, error: 'Refresh token required' });
+    return;
+  }
+  try {
+    const { accessToken, refreshToken } = await rotateRefreshToken(oldToken);
+    res.json({ success: true, data: { token: accessToken, refreshToken } });
+  } catch (err) {
+    if (err instanceof AppError) {
+      res.status(err.statusCode).json({ success: false, error: err.message });
+    } else {
+      res.status(500).json({ success: false, error: 'Token refresh failed' });
+    }
+  }
+});
+
+// ─── POST /api/auth/logout ───────────────────────────────────────
+// Revoke refresh token server-side
+authRouter.post('/logout', async (req: Request, res: Response) => {
+  const { refreshToken: token } = req.body;
+  if (token) {
+    await revokeRefreshToken(token);
+  }
+  res.json({ success: true, message: 'Logged out' });
+});
+
 // ─── POST /api/auth/reset-pin ─────────────────────────────────────
+// Requires a valid OTP verificationToken (from /verify-otp flow)
 authRouter.post('/reset-pin', async (req: Request, res: Response) => {
   const schema = z.object({
-    identifier: z.string(),
-    newPin:     z.string().min(4).max(8),
+    verificationToken: z.string().min(1),
+    newPin:            z.string().min(4).max(8),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -334,24 +358,94 @@ authRouter.post('/reset-pin', async (req: Request, res: Response) => {
     return;
   }
 
-  const { identifier, newPin } = parsed.data;
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ mobile: identifier }, { email: identifier }] },
-    select: { id: true }
-  });
+  const { verificationToken, newPin } = parsed.data;
 
-  if (!user) {
-    res.status(404).json({ success: false, error: 'Account not found' });
+  let payload: { userId: string; step: string };
+  try {
+    payload = jwt.verify(verificationToken, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as any;
+  } catch {
+    res.status(400).json({ success: false, error: 'Verification token expired. Please verify your phone again.' });
+    return;
+  }
+
+  if (payload.step !== 'otp_verified') {
+    res.status(400).json({ success: false, error: 'Invalid verification token' });
     return;
   }
 
   const pinHash = await bcrypt.hash(newPin, BCRYPT_ROUNDS);
-  await prisma.user.update({ 
-    where: { id: user.id }, 
+  await prisma.user.update({
+    where: { id: payload.userId },
     data: { pinHash },
     select: { id: true }
   });
   res.json({ success: true, message: 'PIN updated' });
+});
+
+// ─── POST /api/auth/firebase-verify ──────────────────────────────
+// Verifies a Firebase ID token (from phone auth) and returns a
+// verificationToken to use with /complete-registration or /reset-pin
+authRouter.post('/firebase-verify', async (req: Request, res: Response) => {
+  const schema = z.object({ idToken: z.string().min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ success: false, error: 'Firebase ID token required' });
+    return;
+  }
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(parsed.data.idToken);
+    const phone   = decoded.phone_number;
+
+    if (!phone) {
+      res.status(400).json({ success: false, error: 'No phone number in token' });
+      return;
+    }
+
+    // Upsert a pending user row (same as OTP flow)
+    const user = await prisma.user.upsert({
+      where:  { mobile: phone },
+      create: {
+        name: '', mobile: phone, pinHash: '', role: 'customer',
+        isVerified: true, otpAttempts: 0,
+      },
+      update: {
+        isVerified: true, otpHash: null, otpExpiresAt: null, otpAttempts: 0,
+      },
+      select: { id: true, pinHash: true },
+    });
+
+    // If user already has a PIN they're registered — issue full tokens
+    if (user.pinHash && user.pinHash !== '') {
+      const fullUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, name: true, mobile: true, role: true },
+      });
+      const { accessToken, refreshToken } = await issueTokenPair(user.id, 'customer');
+      res.json({
+        success: true,
+        data: {
+          status: 'existing_user',
+          token: accessToken,
+          refreshToken,
+          user: fullUser,
+        },
+      });
+      return;
+    }
+
+    // New user — return verificationToken for /complete-registration
+    const verificationToken = jwt.sign(
+      { userId: user.id, step: 'otp_verified' },
+      process.env.JWT_SECRET!,
+      { algorithm: 'HS256', expiresIn: '15m' }
+    );
+
+    res.json({ success: true, data: { status: 'new_user', verificationToken } });
+  } catch (err: any) {
+    console.error('[Auth] Firebase verify error:', err.message);
+    res.status(401).json({ success: false, error: 'Invalid or expired Firebase token' });
+  }
 });
 
 // ─── GET /api/auth/me ────────────────────────────────────────────

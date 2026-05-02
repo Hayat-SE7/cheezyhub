@@ -32,7 +32,9 @@ export default function SupportPage() {
   }, [isAuthenticated, router]);
 
   const handleSubmit = async () => {
-    if (!form.subject || !form.message) { toast.error('Fill all fields'); return; }
+    if (!form.subject.trim() || !form.message.trim()) { toast.error('Fill all fields'); return; }
+    if (form.subject.trim().length < 3) { toast.error('Subject must be at least 3 characters'); return; }
+    if (form.message.trim().length < 10) { toast.error('Message must be at least 10 characters'); return; }
     setSubmitting(true);
     try {
       const res = await ticketApi.create(form);
@@ -40,8 +42,9 @@ export default function SupportPage() {
       setShowForm(false);
       setForm({ subject: '', message: '', priority: 'medium' });
       toast.success('Ticket submitted!');
-    } catch {
-      toast.error('Failed to submit ticket');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Failed to submit ticket';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
